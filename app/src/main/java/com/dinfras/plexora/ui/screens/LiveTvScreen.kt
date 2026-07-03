@@ -1,5 +1,6 @@
 package com.dinfras.plexora.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -56,6 +57,10 @@ fun LiveTvScreen(creds: XtreamCredentials) {
         return
     }
 
+    // Bouton Retour : ferme le plein ecran, puis deselectionne la chaine
+    BackHandler(enabled = fullscreen) { fullscreen = false }
+    BackHandler(enabled = !fullscreen && activeChannel != null) { activeChannel = null }
+
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
             LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827))) {
@@ -74,13 +79,19 @@ fun LiveTvScreen(creds: XtreamCredentials) {
             LazyColumn(Modifier.width(280.dp).fillMaxHeight().background(Color(0xFF0B0F19))) {
                 items(filteredChannels) { ch ->
                     val active = activeChannel?.streamId == ch.streamId
-                    Text(
-                        ch.name,
+                    Row(
                         modifier = Modifier.fillMaxWidth().clickable { activeChannel = ch }
                             .background(if (active) PlexoraOrange.copy(alpha = 0.2f) else Color.Transparent)
-                            .padding(16.dp, 12.dp),
-                        fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                    )
+                            .padding(12.dp, 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ChannelLogo(ch.name, ch.streamIcon, size = 32.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            ch.name,
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                        )
+                    }
                 }
             }
 

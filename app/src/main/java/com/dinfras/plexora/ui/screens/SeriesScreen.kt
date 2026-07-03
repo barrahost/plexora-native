@@ -1,5 +1,6 @@
 package com.dinfras.plexora.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -133,6 +134,12 @@ private fun SeriesDetail(series: XtreamSeries, creds: XtreamCredentials, service
     // Reinitialise l'apercu quand on change d'episode
     LaunchedEffect(activeEp) { playing = false }
     val ep = activeEp
+
+    // Bouton Retour : plein ecran -> lecture -> episode -> fiche serie -> grille
+    BackHandler(enabled = fullscreen) { fullscreen = false }
+    BackHandler(enabled = !fullscreen && playing) { playing = false }
+    BackHandler(enabled = !fullscreen && !playing && activeEp != null) { activeEp = null }
+    BackHandler(enabled = !fullscreen && !playing && activeEp == null) { onBack() }
 
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize().background(Color(0xFF030712))) {

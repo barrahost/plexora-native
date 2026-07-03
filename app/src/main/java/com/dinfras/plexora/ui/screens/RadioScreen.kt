@@ -56,13 +56,16 @@ fun RadioScreen(creds: XtreamCredentials) {
         LazyColumn(Modifier.width(300.dp).fillMaxHeight().background(Color(0xFF111827))) {
             items(stations) { s ->
                 val isActive = active?.streamId == s.streamId
-                Text(
-                    s.name,
+                Row(
                     modifier = Modifier.fillMaxWidth().clickable { active = s }
                         .background(if (isActive) PlexoraOrange.copy(alpha = 0.2f) else Color.Transparent)
-                        .padding(16.dp, 12.dp),
-                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                )
+                        .padding(12.dp, 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ChannelLogo(s.name, s.streamIcon, size = 32.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(s.name, fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal)
+                }
             }
         }
 
@@ -72,6 +75,8 @@ fun RadioScreen(creds: XtreamCredentials) {
                 Text("Sélectionne une station", color = Color.Gray)
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    ChannelLogo(station.name, station.streamIcon, size = 96.dp)
+                    Spacer(Modifier.height(12.dp))
                     Text(station.name, color = Color.White, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(12.dp))
                     val url = remember(station) { XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, station.streamId) }

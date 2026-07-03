@@ -1,5 +1,6 @@
 package com.dinfras.plexora.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -7,11 +8,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dinfras.plexora.R
 import com.dinfras.plexora.data.*
 import kotlinx.coroutines.launch
 
@@ -58,7 +60,11 @@ fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
                 Modifier.widthIn(max = 420.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text("Plexora", fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                Image(
+                    painter = painterResource(R.drawable.logo_plexora_login),
+                    contentDescription = "Plexora",
+                    modifier = Modifier.width(220.dp),
+                )
                 Spacer(Modifier.height(8.dp))
                 Text("Connecte-toi avec tes identifiants Xtream", fontSize = 14.sp)
                 Spacer(Modifier.height(24.dp))

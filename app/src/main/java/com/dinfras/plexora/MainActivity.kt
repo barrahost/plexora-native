@@ -1,9 +1,13 @@
 package com.dinfras.plexora
 
+import android.app.Activity
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,9 +17,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.media3.common.util.UnstableApi
 import com.dinfras.plexora.data.XtreamCredentials
 import com.dinfras.plexora.ui.screens.*
@@ -63,16 +69,42 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun SplashScreen() {
     Box(Modifier.fillMaxSize().background(PlexoraBackground), contentAlignment = Alignment.Center) {
-        Text("Plexora", fontSize = 42.sp, fontWeight = FontWeight.Bold, color = PlexoraViolet)
+        Image(
+            painter = painterResource(R.drawable.logo_plexora_login),
+            contentDescription = "Plexora",
+            modifier = Modifier.width(280.dp),
+        )
     }
 }
 
 @UnstableApi
 @Composable
 private fun AppContent() {
+    val context = LocalContext.current
     var creds by remember { mutableStateOf<XtreamCredentials?>(null) }
     var tab by remember { mutableStateOf(Tab.LIVE) }
     val current = creds
+
+    // Bouton Retour, du plus profond (ecrans) au plus superficiel (ici) :
+    // Compose empile les BackHandler dans l'ordre de composition — celui du
+    // composant le plus imbrique (ex. lecteur plein ecran ouvert dans
+    // LiveTvScreen) est toujours prioritaire sur ceux-ci, sans coordination
+    // manuelle necessaire (contrairement au bricolage fait cote web).
+
+    // Le plus superficiel : retour a l'onglet racine avant de quitter
+    BackHandler(enabled = tab != Tab.LIVE) { tab = Tab.LIVE }
+
+    // Le fallback ultime : double-appui sous 2s pour quitter l'app
+    var lastBack by remember { mutableStateOf(0L) }
+    BackHandler(enabled = true) {
+        val now = System.currentTimeMillis()
+        if (now - lastBack < 2000) {
+            (context as? Activity)?.finish()
+        } else {
+            lastBack = now
+            Toast.makeText(context, "Appuie de nouveau sur Retour pour quitter", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     if (current == null) {
         LoginScreen(onLoggedIn = { creds = it })
@@ -98,7 +130,12 @@ private fun TopNav(active: Tab, onSelect: (Tab) -> Unit) {
         Modifier.fillMaxWidth().height(56.dp).background(Color(0xFF111827)).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Plexora", fontWeight = FontWeight.Bold, color = PlexoraViolet, modifier = Modifier.padding(end = 24.dp))
+        Image(
+            painter = painterResource(R.drawable.logo_plexora_nav),
+            contentDescription = "Plexora",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.height(36.dp).padding(end = 20.dp),
+        )
         Tab.entries.forEach { t ->
             val isActive = t == active
             Text(

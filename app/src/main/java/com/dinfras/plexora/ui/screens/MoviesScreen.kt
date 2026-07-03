@@ -1,5 +1,6 @@
 package com.dinfras.plexora.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -118,6 +119,11 @@ private fun MovieDetail(creds: XtreamCredentials, service: XtreamService, movie:
     var playing by remember { mutableStateOf(false) }
     var fullscreen by remember { mutableStateOf(false) }
     var info by remember { mutableStateOf<VodInfo?>(null) }
+
+    // Bouton Retour : plein ecran -> lecture -> fiche film -> grille
+    BackHandler(enabled = fullscreen) { fullscreen = false }
+    BackHandler(enabled = !fullscreen && playing) { playing = false }
+    BackHandler(enabled = !fullscreen && !playing) { onBack() }
 
     LaunchedEffect(movie) {
         info = runCatching { service.getVodInfo(creds.username, creds.password, movie.streamId).info }.getOrNull()
