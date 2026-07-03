@@ -3,7 +3,12 @@ package com.dinfras.plexora.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,11 +17,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import com.dinfras.plexora.data.BufferMode
-import com.dinfras.plexora.data.BufferPrefs
-import com.dinfras.plexora.data.CredentialsStore
-import com.dinfras.plexora.data.getDeviceId
+import com.dinfras.plexora.data.*
+import com.dinfras.plexora.ui.theme.PlexoraOrange
 import com.dinfras.plexora.ui.theme.PlexoraViolet
 import kotlinx.coroutines.launch
 
@@ -30,18 +35,76 @@ private val BUFFER_OPTIONS = listOf(
 )
 
 @Composable
-fun SettingsScreen(onLogout: () -> Unit) {
+fun SettingsScreen(
+    activeCreds: XtreamCredentials,
+    onLogout: () -> Unit,
+    onSwitchPlaylist: (XtreamCredentials) -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val deviceId = remember { getDeviceId(context) }
     var buffer by remember { mutableStateOf(BufferMode.MEDIUM) }
+    var overlayAlpha by remember { mutableFloatStateOf(UiPrefs.DEFAULT_OVERLAY_ALPHA) }
+    var playlists by remember { mutableStateOf<List<SavedPlaylist>>(emptyList()) }
+    var showAddForm by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { buffer = BufferPrefs.get(context) }
+    suspend fun refreshPlaylists() { playlists = PlaylistsStore.getAll(context) }
 
-    Column(Modifier.fillMaxSize().padding(32.dp).widthIn(max = 480.dp)) {
+    LaunchedEffect(Unit) {
+        buffer = BufferPrefs.get(context)
+        overlayAlpha = UiPrefs.getOverlayAlpha(context)
+        refreshPlaylists()
+    }
+
+    Column(
+        Modifier.fillMaxSize().padding(32.dp).widthIn(max = 520.dp).verticalScroll(rememberScrollState()),
+    ) {
         Text("Paramètres", fontWeight = FontWeight.Bold, fontSize = MaterialTheme.typography.headlineSmall.fontSize)
         Spacer(Modifier.height(24.dp))
 
+        // --- Playlists ---
+        Text("Playlists", fontWeight = FontWeight.SemiBold)
+        Text("Bascule entre plusieurs comptes Xtream ou ajoutes-en un nouveau.", color = Color.Gray, fontSize = MaterialTheme.typography.bodySmall.fontSize)
+        Spacer(Modifier.height(12.dp))
+
+        playlists.forEach { p ->
+            val isActive = p.url == activeCreds.url && p.username == activeCreds.username
+            Row(
+                Modifier.fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (isActive) PlexoraViolet.copy(alpha = 0.2f) else Color(0xFF1F2937))
+                    .clickable(enabled = !isActive) { onSwitchPlaylist(p.toCredentials()) }
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(p.label, fontWeight = FontWeight.SemiBold, color = if (isActive) PlexoraViolet else Color.White)
+                    Text(if (isActive) "Playlist active" else "Toucher pour activer", fontSize = MaterialTheme.typography.bodySmall.fontSize, color = Color.Gray)
+                }
+                IconButton(onClick = {
+                    scope.launch { PlaylistsStore.remove(context, p.id); refreshPlaylists() }
+                }) {
+                    Icon(Icons.Filled.Close, contentDescription = "Supprimer", tint = Color.Gray)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        if (showAddForm) {
+            AddPlaylistForm(
+                onCancel = { showAddForm = false },
+                onSaved = { scope.launch { refreshPlaylists() }; showAddForm = false },
+            )
+        } else {
+            OutlinedButton(onClick = { showAddForm = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("+ Ajouter une playlist")
+            }
+        }
+
+        Spacer(Modifier.height(32.dp))
+
+        // --- Tampon vidéo ---
         Text("Taille du tampon vidéo", fontWeight = FontWeight.SemiBold)
         Text("Augmente-la si les chaînes coupent souvent.", color = Color.Gray, fontSize = MaterialTheme.typography.bodySmall.fontSize)
         Spacer(Modifier.height(12.dp))
@@ -66,6 +129,31 @@ fun SettingsScreen(onLogout: () -> Unit) {
         }
 
         Spacer(Modifier.height(32.dp))
+
+        // --- Transparence ---
+        Text("Transparence de l'affichage", fontWeight = FontWeight.SemiBold)
+        Text(
+            "Opacité des bandeaux affichés par-dessus la vidéo en plein écran.",
+            color = Color.Gray,
+            fontSize = MaterialTheme.typography.bodySmall.fontSize,
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Slider(
+                value = overlayAlpha,
+                onValueChange = {
+                    overlayAlpha = it
+                    scope.launch { UiPrefs.setOverlayAlpha(context, it) }
+                },
+                valueRange = 0f..1f,
+                modifier = Modifier.weight(1f),
+                colors = SliderDefaults.colors(thumbColor = PlexoraOrange, activeTrackColor = PlexoraOrange),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text("${(overlayAlpha * 100).toInt()}%", modifier = Modifier.widthIn(min = 40.dp))
+        }
+
+        Spacer(Modifier.height(32.dp))
         Button(onClick = {
             scope.launch {
                 CredentialsStore.clear(context)
@@ -79,5 +167,77 @@ fun SettingsScreen(onLogout: () -> Unit) {
             fontSize = MaterialTheme.typography.labelSmall.fontSize,
             color = Color.Gray,
         )
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun AddPlaylistForm(onCancel: () -> Unit, onSaved: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var label by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
+
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xFF1F2937)).padding(14.dp),
+    ) {
+        Text("Nouvelle playlist", fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(
+            value = label, onValueChange = { label = it },
+            label = { Text("Nom (optionnel)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = url, onValueChange = { url = it },
+            label = { Text("URL du serveur") }, placeholder = { Text("http://monserveur.com") },
+            singleLine = true, modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = username, onValueChange = { username = it },
+            label = { Text("Nom d'utilisateur") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = password, onValueChange = { password = it },
+            label = { Text("Mot de passe") }, singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        error?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, color = MaterialTheme.colorScheme.error, fontSize = MaterialTheme.typography.bodySmall.fontSize)
+        }
+        Spacer(Modifier.height(12.dp))
+        Row {
+            TextButton(onClick = onCancel) { Text("Annuler") }
+            Spacer(Modifier.weight(1f))
+            Button(
+                enabled = !saving,
+                onClick = {
+                    error = null
+                    saving = true
+                    scope.launch {
+                        runCatching {
+                            val creds = XtreamCredentials(url, username, password)
+                            val info = XtreamClient.create(creds.url).getAccountInfo(creds.username, creds.password)
+                            if (info.userInfo?.auth != 1) error("Identifiants incorrects.")
+                            val finalLabel = label.ifBlank { "$username — ${url.substringAfter("//")}" }
+                            PlaylistsStore.upsert(context, finalLabel, creds)
+                            onSaved()
+                        }.onFailure {
+                            error = "Impossible de joindre le serveur.\n(${it.message})"
+                            saving = false
+                        }
+                    }
+                },
+            ) { Text(if (saving) "Vérification..." else "Ajouter") }
+        }
     }
 }

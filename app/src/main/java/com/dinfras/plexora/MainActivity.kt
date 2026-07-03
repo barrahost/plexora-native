@@ -117,7 +117,11 @@ private fun AppContent() {
                     Tab.MOVIES -> MoviesScreen(current)
                     Tab.SERIES -> SeriesScreen(current)
                     Tab.RADIO -> RadioScreen(current)
-                    Tab.SETTINGS -> SettingsScreen(onLogout = { creds = null; tab = Tab.LIVE })
+                    Tab.SETTINGS -> SettingsScreen(
+                        activeCreds = current,
+                        onLogout = { creds = null; tab = Tab.LIVE },
+                        onSwitchPlaylist = { creds = it },
+                    )
                 }
             }
         }

@@ -19,6 +19,8 @@ object CredentialsStore {
             it[KEY_USER] = creds.username
             it[KEY_PASS] = creds.password
         }
+        val defaultLabel = runCatching { creds.username + " — " + creds.url.substringAfter("//") }.getOrDefault(creds.username)
+        PlaylistsStore.upsert(context, defaultLabel, creds)
     }
 
     suspend fun load(context: Context): XtreamCredentials? {
