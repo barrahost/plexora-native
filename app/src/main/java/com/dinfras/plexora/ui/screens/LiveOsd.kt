@@ -339,19 +339,42 @@ private fun EpgGridOverlay(
             }
         }
         Divider(color = Color(0xFF1F2937))
-        LazyColumn(Modifier.fillMaxSize()) {
-            itemsIndexed(channels) { idx, ch ->
-                EpgGridRow(
-                    index = idx,
-                    channel = ch,
-                    active = ch.streamId == activeChannel.streamId,
-                    windowStart = windowStart,
-                    creds = creds,
-                    service = service,
-                    onFocus = { focused = ch },
-                    onSelect = { onSelectChannel(ch) },
-                )
-            }
+        EpgGridList(
+            channels = channels,
+            activeChannel = activeChannel,
+            windowStart = windowStart,
+            creds = creds,
+            service = service,
+            onFocus = { focused = it },
+            onSelect = onSelectChannel,
+        )
+    }
+}
+
+// Grille multi-chaines reutilisee par le guide TV plein ecran ET par la
+// 3e colonne de l'ecran Live TV (navigation classique).
+@Composable
+fun EpgGridList(
+    channels: List<XtreamChannel>,
+    activeChannel: XtreamChannel?,
+    windowStart: Long,
+    creds: XtreamCredentials,
+    service: XtreamService,
+    onFocus: (XtreamChannel) -> Unit,
+    onSelect: (XtreamChannel) -> Unit,
+) {
+    LazyColumn(Modifier.fillMaxSize()) {
+        itemsIndexed(channels) { idx, ch ->
+            EpgGridRow(
+                index = idx,
+                channel = ch,
+                active = ch.streamId == activeChannel?.streamId,
+                windowStart = windowStart,
+                creds = creds,
+                service = service,
+                onFocus = { onFocus(ch) },
+                onSelect = { onSelect(ch) },
+            )
         }
     }
 }

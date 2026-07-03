@@ -34,38 +34,63 @@ private val BUFFER_OPTIONS = listOf(
     BufferOption(BufferMode.HIGH, "Élevé", "Absorbe les ralentissements serveur — moins de coupures."),
 )
 
+private enum class SettingsSection(val label: String) {
+    PLAYLISTS("Listes de lecture"),
+    APPEARANCE("Apparence"),
+    PLAYER("Lecteur"),
+}
+
+// Sous-menu façon TiviMate : une colonne de sections a gauche, le contenu
+// de la section choisie a droite.
 @Composable
 fun SettingsScreen(
     activeCreds: XtreamCredentials,
     onLogout: () -> Unit,
     onSwitchPlaylist: (XtreamCredentials) -> Unit,
 ) {
+    var section by remember { mutableStateOf(SettingsSection.PLAYLISTS) }
+
+    Row(Modifier.fillMaxSize()) {
+        Column(Modifier.width(260.dp).fillMaxHeight().background(Color(0xFF111827)).padding(vertical = 24.dp)) {
+            Text("Paramètres", fontWeight = FontWeight.Bold, fontSize = MaterialTheme.typography.headlineSmall.fontSize, modifier = Modifier.padding(horizontal = 20.dp))
+            Spacer(Modifier.height(20.dp))
+            SettingsSection.entries.forEach { s ->
+                val active = s == section
+                Text(
+                    s.label,
+                    modifier = Modifier.fillMaxWidth().clickable { section = s }
+                        .background(if (active) PlexoraViolet.copy(alpha = 0.25f) else Color.Transparent)
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    color = if (active) Color.White else Color(0xFF9CA3AF),
+                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                )
+            }
+        }
+
+        Box(Modifier.weight(1f).fillMaxHeight().padding(32.dp)) {
+            when (section) {
+                SettingsSection.PLAYLISTS -> PlaylistsSection(activeCreds, onSwitchPlaylist)
+                SettingsSection.APPEARANCE -> AppearanceSection()
+                SettingsSection.PLAYER -> PlayerSection(onLogout)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistsSection(activeCreds: XtreamCredentials, onSwitchPlaylist: (XtreamCredentials) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val deviceId = remember { getDeviceId(context) }
-    var buffer by remember { mutableStateOf(BufferMode.MEDIUM) }
-    var overlayAlpha by remember { mutableFloatStateOf(UiPrefs.DEFAULT_OVERLAY_ALPHA) }
     var playlists by remember { mutableStateOf<List<SavedPlaylist>>(emptyList()) }
     var showAddForm by remember { mutableStateOf(false) }
 
     suspend fun refreshPlaylists() { playlists = PlaylistsStore.getAll(context) }
+    LaunchedEffect(Unit) { refreshPlaylists() }
 
-    LaunchedEffect(Unit) {
-        buffer = BufferPrefs.get(context)
-        overlayAlpha = UiPrefs.getOverlayAlpha(context)
-        refreshPlaylists()
-    }
-
-    Column(
-        Modifier.fillMaxSize().padding(32.dp).widthIn(max = 520.dp).verticalScroll(rememberScrollState()),
-    ) {
-        Text("Paramètres", fontWeight = FontWeight.Bold, fontSize = MaterialTheme.typography.headlineSmall.fontSize)
-        Spacer(Modifier.height(24.dp))
-
-        // --- Playlists ---
-        Text("Playlists", fontWeight = FontWeight.SemiBold)
+    Column(Modifier.fillMaxSize().widthIn(max = 520.dp).verticalScroll(rememberScrollState())) {
+        Text("Listes de lecture", fontWeight = FontWeight.SemiBold, fontSize = MaterialTheme.typography.titleMedium.fontSize)
         Text("Bascule entre plusieurs comptes Xtream ou ajoutes-en un nouveau.", color = Color.Gray, fontSize = MaterialTheme.typography.bodySmall.fontSize)
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
 
         playlists.forEach { p ->
             val isActive = p.url == activeCreds.url && p.username == activeCreds.username
@@ -101,10 +126,54 @@ fun SettingsScreen(
                 Text("+ Ajouter une playlist")
             }
         }
+    }
+}
 
-        Spacer(Modifier.height(32.dp))
+@Composable
+private fun AppearanceSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var overlayAlpha by remember { mutableFloatStateOf(UiPrefs.DEFAULT_OVERLAY_ALPHA) }
+    LaunchedEffect(Unit) { overlayAlpha = UiPrefs.getOverlayAlpha(context) }
 
-        // --- Tampon vidéo ---
+    Column(Modifier.fillMaxSize().widthIn(max = 520.dp).verticalScroll(rememberScrollState())) {
+        Text("Apparence", fontWeight = FontWeight.SemiBold, fontSize = MaterialTheme.typography.titleMedium.fontSize)
+        Spacer(Modifier.height(16.dp))
+        Text("Transparence de l'affichage", fontWeight = FontWeight.SemiBold)
+        Text(
+            "Opacité des bandeaux affichés par-dessus la vidéo en plein écran.",
+            color = Color.Gray,
+            fontSize = MaterialTheme.typography.bodySmall.fontSize,
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Slider(
+                value = overlayAlpha,
+                onValueChange = {
+                    overlayAlpha = it
+                    scope.launch { UiPrefs.setOverlayAlpha(context, it) }
+                },
+                valueRange = 0f..1f,
+                modifier = Modifier.weight(1f),
+                colors = SliderDefaults.colors(thumbColor = PlexoraOrange, activeTrackColor = PlexoraOrange),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text("${(overlayAlpha * 100).toInt()}%", modifier = Modifier.widthIn(min = 40.dp))
+        }
+    }
+}
+
+@Composable
+private fun PlayerSection(onLogout: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val deviceId = remember { getDeviceId(context) }
+    var buffer by remember { mutableStateOf(BufferMode.MEDIUM) }
+    LaunchedEffect(Unit) { buffer = BufferPrefs.get(context) }
+
+    Column(Modifier.fillMaxSize().widthIn(max = 520.dp).verticalScroll(rememberScrollState())) {
+        Text("Lecteur", fontWeight = FontWeight.SemiBold, fontSize = MaterialTheme.typography.titleMedium.fontSize)
+        Spacer(Modifier.height(16.dp))
         Text("Taille du tampon vidéo", fontWeight = FontWeight.SemiBold)
         Text("Augmente-la si les chaînes coupent souvent.", color = Color.Gray, fontSize = MaterialTheme.typography.bodySmall.fontSize)
         Spacer(Modifier.height(12.dp))
@@ -129,31 +198,6 @@ fun SettingsScreen(
         }
 
         Spacer(Modifier.height(32.dp))
-
-        // --- Transparence ---
-        Text("Transparence de l'affichage", fontWeight = FontWeight.SemiBold)
-        Text(
-            "Opacité des bandeaux affichés par-dessus la vidéo en plein écran.",
-            color = Color.Gray,
-            fontSize = MaterialTheme.typography.bodySmall.fontSize,
-        )
-        Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Slider(
-                value = overlayAlpha,
-                onValueChange = {
-                    overlayAlpha = it
-                    scope.launch { UiPrefs.setOverlayAlpha(context, it) }
-                },
-                valueRange = 0f..1f,
-                modifier = Modifier.weight(1f),
-                colors = SliderDefaults.colors(thumbColor = PlexoraOrange, activeTrackColor = PlexoraOrange),
-            )
-            Spacer(Modifier.width(12.dp))
-            Text("${(overlayAlpha * 100).toInt()}%", modifier = Modifier.widthIn(min = 40.dp))
-        }
-
-        Spacer(Modifier.height(32.dp))
         Button(onClick = {
             scope.launch {
                 CredentialsStore.clear(context)
@@ -167,7 +211,6 @@ fun SettingsScreen(
             fontSize = MaterialTheme.typography.labelSmall.fontSize,
             color = Color.Gray,
         )
-        Spacer(Modifier.height(24.dp))
     }
 }
 

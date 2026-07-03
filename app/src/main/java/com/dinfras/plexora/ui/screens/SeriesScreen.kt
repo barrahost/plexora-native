@@ -3,6 +3,7 @@ package com.dinfras.plexora.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -18,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -67,6 +69,8 @@ fun SeriesScreen(creds: XtreamCredentials) {
         return
     }
 
+    var focused by remember { mutableStateOf(filtered.firstOrNull()) }
+
     Row(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827))) {
             item {
@@ -90,22 +94,41 @@ fun SeriesScreen(creds: XtreamCredentials) {
             }
         }
 
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 140.dp),
-            modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFF030712)),
-            contentPadding = PaddingValues(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            items(filtered) { s ->
-                Column(Modifier.clickable { selected = s }) {
-                    Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1F2937))) {
-                        if (!s.cover.isNullOrBlank()) {
-                            AsyncImage(model = s.cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF030712))) {
+            val fs = focused
+            if (fs != null) {
+                MediaPreviewInfo(
+                    title = fs.name,
+                    rating = fs.rating5based,
+                    releaseDate = null,
+                    genre = categories.firstOrNull { it.categoryId == fs.categoryId }?.categoryName,
+                    plot = null,
+                    cast = null,
+                    director = null,
+                )
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 140.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(filtered) { s ->
+                    Column(
+                        Modifier
+                            .clickable { selected = s }
+                            .focusable()
+                            .onFocusChanged { if (it.isFocused) focused = s },
+                    ) {
+                        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1F2937))) {
+                            if (!s.cover.isNullOrBlank()) {
+                                AsyncImage(model = s.cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            }
                         }
+                        Spacer(Modifier.height(4.dp))
+                        Text(s.name, maxLines = 2, fontSize = MaterialTheme.typography.bodySmall.fontSize)
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text(s.name, maxLines = 2, fontSize = MaterialTheme.typography.bodySmall.fontSize)
                 }
             }
         }
@@ -114,7 +137,7 @@ fun SeriesScreen(creds: XtreamCredentials) {
 
 @androidx.media3.common.util.UnstableApi
 @Composable
-private fun SeriesDetail(series: XtreamSeries, creds: XtreamCredentials, service: XtreamService, onBack: () -> Unit) {
+fun SeriesDetail(series: XtreamSeries, creds: XtreamCredentials, service: XtreamService, onBack: () -> Unit) {
     var episodesBySeason by remember { mutableStateOf<Map<String, List<SeriesEpisode>>>(emptyMap()) }
     var selectedSeason by remember { mutableStateOf<String?>(null) }
     var activeEp by remember { mutableStateOf<SeriesEpisode?>(null) }

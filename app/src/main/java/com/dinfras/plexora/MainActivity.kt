@@ -11,13 +11,21 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Theaters
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -30,8 +38,12 @@ import com.dinfras.plexora.ui.theme.PlexoraTheme
 import com.dinfras.plexora.ui.theme.PlexoraViolet
 import kotlinx.coroutines.delay
 
-private enum class Tab(val label: String) {
-    LIVE("Live TV"), MOVIES("Films"), SERIES("Séries"), RADIO("Radio"), SETTINGS("Paramètres")
+private enum class Tab(val label: String, val icon: ImageVector) {
+    SEARCH("Rechercher", Icons.Filled.Search),
+    LIVE("TV", Icons.Filled.Tv),
+    MOVIES("Films", Icons.Filled.Movie),
+    SERIES("Séries", Icons.Filled.Theaters),
+    SETTINGS("Paramètres", Icons.Filled.Settings),
 }
 
 // Marge de securite TV (overscan) : de nombreux televiseurs (ex. TCL) rognent
@@ -109,14 +121,14 @@ private fun AppContent() {
     if (current == null) {
         LoginScreen(onLoggedIn = { creds = it })
     } else {
-        Column(Modifier.fillMaxSize()) {
-            TopNav(active = tab, onSelect = { tab = it })
-            Box(Modifier.weight(1f)) {
+        Row(Modifier.fillMaxSize()) {
+            Sidebar(active = tab, onSelect = { tab = it })
+            Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (tab) {
+                    Tab.SEARCH -> SearchScreen(current)
                     Tab.LIVE -> LiveTvScreen(current)
                     Tab.MOVIES -> MoviesScreen(current)
                     Tab.SERIES -> SeriesScreen(current)
-                    Tab.RADIO -> RadioScreen(current)
                     Tab.SETTINGS -> SettingsScreen(
                         activeCreds = current,
                         onLogout = { creds = null; tab = Tab.LIVE },
@@ -128,29 +140,34 @@ private fun AppContent() {
     }
 }
 
+// Barre laterale persistante inspiree de TiviMate : logo en haut, puis les
+// sections principales de l'appli, toujours visibles pour une navigation
+// rapide au D-pad.
 @Composable
-private fun TopNav(active: Tab, onSelect: (Tab) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().height(56.dp).background(Color(0xFF111827)).padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+private fun Sidebar(active: Tab, onSelect: (Tab) -> Unit) {
+    Column(
+        Modifier.width(200.dp).fillMaxHeight().background(Color(0xFF0B0F19)).padding(vertical = 16.dp),
     ) {
         Image(
             painter = painterResource(R.drawable.logo_plexora_nav),
             contentDescription = "Plexora",
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.height(36.dp).padding(end = 20.dp),
+            modifier = Modifier.height(32.dp).padding(horizontal = 16.dp),
         )
+        Spacer(Modifier.height(24.dp))
         Tab.entries.forEach { t ->
             val isActive = t == active
-            Text(
-                t.label,
-                modifier = Modifier
+            Row(
+                Modifier.fillMaxWidth()
                     .clickable { onSelect(t) }
-                    .background(if (isActive) PlexoraViolet else Color.Transparent, shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-            )
-            Spacer(Modifier.width(4.dp))
+                    .background(if (isActive) PlexoraViolet.copy(alpha = 0.25f) else Color.Transparent, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(t.icon, contentDescription = t.label, tint = if (isActive) PlexoraViolet else Color(0xFF9CA3AF))
+                Spacer(Modifier.width(12.dp))
+                Text(t.label, color = if (isActive) Color.White else Color(0xFF9CA3AF), fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal)
+            }
+            Spacer(Modifier.height(4.dp))
         }
     }
 }

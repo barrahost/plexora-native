@@ -95,10 +95,10 @@ fun LiveTvScreen(creds: XtreamCredentials) {
                 }
             }
 
-            // Colonne 3 : apercu (haut) + EPG (bas), jamais plein ecran ici
+            // Colonne 3 : petit apercu (haut) + grille de programmes multi-chaines (bas), jamais plein ecran ici
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 val channel = activeChannel
-                Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
+                Box(Modifier.height(200.dp).fillMaxWidth().background(Color.Black)) {
                     if (channel == null) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text("Sélectionne une chaîne", color = Color.Gray)
@@ -114,7 +114,16 @@ fun LiveTvScreen(creds: XtreamCredentials) {
                     }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth().background(Color(0xFF030712))) {
-                    if (channel != null) EpgPanel(creds = creds, service = service, channel = channel)
+                    val windowStart = remember { System.currentTimeMillis() / 1000 }
+                    EpgGridList(
+                        channels = filteredChannels,
+                        activeChannel = channel,
+                        windowStart = windowStart,
+                        creds = creds,
+                        service = service,
+                        onFocus = {},
+                        onSelect = { activeChannel = it },
+                    )
                 }
             }
         }
@@ -130,51 +139,6 @@ fun LiveTvScreen(creds: XtreamCredentials) {
                 onChannelChange = { activeChannel = it },
                 onExit = { fullscreen = false },
             )
-        }
-    }
-}
-
-@Composable
-private fun EpgPanel(creds: XtreamCredentials, service: XtreamService, channel: XtreamChannel) {
-    var epg by remember(channel) { mutableStateOf<List<EpgItem>>(emptyList()) }
-    var loading by remember(channel) { mutableStateOf(true) }
-
-    LaunchedEffect(channel) {
-        loading = true
-        epg = runCatching { service.getShortEpg(creds.username, creds.password, channel.streamId).epgListings ?: emptyList() }
-            .getOrDefault(emptyList())
-        loading = false
-    }
-
-    if (loading) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-        }
-        return
-    }
-    if (epg.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Guide des programmes non fourni pour cette chaîne.", color = Color.Gray, fontSize = MaterialTheme.typography.bodySmall.fontSize)
-        }
-        return
-    }
-
-    LazyColumn(Modifier.fillMaxSize().padding(12.dp)) {
-        items(epg) { item ->
-            val isNow = item.nowPlaying == 1
-            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                Text(
-                    decodeEpgText(item.title),
-                    fontWeight = if (isNow) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isNow) PlexoraOrange else Color.White,
-                )
-                item.description?.let {
-                    val desc = decodeEpgText(it)
-                    if (desc.isNotBlank()) {
-                        Text(desc, color = Color.Gray, fontSize = MaterialTheme.typography.bodySmall.fontSize, maxLines = 2)
-                    }
-                }
-            }
         }
     }
 }

@@ -3,6 +3,7 @@ package com.dinfras.plexora.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -18,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +29,7 @@ import coil.compose.AsyncImage
 import com.dinfras.plexora.data.*
 import com.dinfras.plexora.player.LiveVideoPlayer
 import com.dinfras.plexora.ui.theme.PlexoraOrange
+import kotlinx.coroutines.delay
 
 @androidx.media3.common.util.UnstableApi
 @Composable
@@ -67,6 +70,15 @@ fun MoviesScreen(creds: XtreamCredentials) {
         return
     }
 
+    var focused by remember { mutableStateOf(filtered.firstOrNull()) }
+    var focusedInfo by remember { mutableStateOf<VodInfo?>(null) }
+    LaunchedEffect(focused) {
+        focusedInfo = null
+        val f = focused ?: return@LaunchedEffect
+        delay(250)
+        focusedInfo = runCatching { service.getVodInfo(creds.username, creds.password, f.streamId).info }.getOrNull()
+    }
+
     Row(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827))) {
             item {
@@ -90,23 +102,42 @@ fun MoviesScreen(creds: XtreamCredentials) {
             }
         }
 
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 140.dp),
-            modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFF030712)),
-            contentPadding = PaddingValues(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            items(filtered) { m ->
-                Column(Modifier.clickable { selected = m }) {
-                    Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1F2937))) {
-                        val poster = m.streamIcon ?: m.cover
-                        if (!poster.isNullOrBlank()) {
-                            AsyncImage(model = poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF030712))) {
+            val fm = focused
+            if (fm != null) {
+                MediaPreviewInfo(
+                    title = fm.name,
+                    rating = fm.rating5based,
+                    releaseDate = focusedInfo?.releaseDate,
+                    genre = focusedInfo?.genre,
+                    plot = focusedInfo?.plot,
+                    cast = focusedInfo?.cast,
+                    director = focusedInfo?.director,
+                )
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 140.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(filtered) { m ->
+                    Column(
+                        Modifier
+                            .clickable { selected = m }
+                            .focusable()
+                            .onFocusChanged { if (it.isFocused) focused = m },
+                    ) {
+                        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1F2937))) {
+                            val poster = m.streamIcon ?: m.cover
+                            if (!poster.isNullOrBlank()) {
+                                AsyncImage(model = poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            }
                         }
+                        Spacer(Modifier.height(4.dp))
+                        Text(m.name, maxLines = 2, fontSize = MaterialTheme.typography.bodySmall.fontSize)
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text(m.name, maxLines = 2, fontSize = MaterialTheme.typography.bodySmall.fontSize)
                 }
             }
         }
@@ -115,7 +146,7 @@ fun MoviesScreen(creds: XtreamCredentials) {
 
 @androidx.media3.common.util.UnstableApi
 @Composable
-private fun MovieDetail(creds: XtreamCredentials, service: XtreamService, movie: XtreamMovie, onBack: () -> Unit) {
+fun MovieDetail(creds: XtreamCredentials, service: XtreamService, movie: XtreamMovie, onBack: () -> Unit) {
     var playing by remember { mutableStateOf(false) }
     var fullscreen by remember { mutableStateOf(false) }
     var info by remember { mutableStateOf<VodInfo?>(null) }
