@@ -63,6 +63,23 @@ interface XtreamService {
         @Query("series_id") seriesId: Int,
         @Query("action") action: String = "get_series_info",
     ): SeriesInfoWrapper
+
+    @GET("player_api.php")
+    suspend fun getShortEpg(
+        @Query("username") username: String,
+        @Query("password") password: String,
+        @Query("stream_id") streamId: Int,
+        @Query("limit") limit: Int = 6,
+        @Query("action") action: String = "get_short_epg",
+    ): EpgListingsWrapper
+
+    @GET("player_api.php")
+    suspend fun getVodInfo(
+        @Query("username") username: String,
+        @Query("password") password: String,
+        @Query("vod_id") vodId: Int,
+        @Query("action") action: String = "get_vod_info",
+    ): VodInfoWrapper
 }
 
 // Client HTTP natif : contrairement au WebView, aucune contrainte CORS ici —

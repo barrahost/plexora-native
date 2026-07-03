@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,7 +20,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -36,7 +36,6 @@ fun MoviesScreen(creds: XtreamCredentials) {
     var movies by remember { mutableStateOf<List<XtreamMovie>>(emptyList()) }
     var selectedCat by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<XtreamMovie?>(null) }
-    var playing by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -63,13 +62,7 @@ fun MoviesScreen(creds: XtreamCredentials) {
 
     val movie = selected
     if (movie != null) {
-        MovieDetail(
-            movie = movie,
-            playing = playing,
-            streamUrl = { XtreamClient.vodStreamUrl(creds.url, creds.username, creds.password, movie.streamId, movie.containerExtension ?: "mp4") },
-            onPlay = { playing = true },
-            onBack = { selected = null; playing = false },
-        )
+        MovieDetail(creds = creds, service = service, movie = movie, onBack = { selected = null })
         return
     }
 
@@ -104,12 +97,8 @@ fun MoviesScreen(creds: XtreamCredentials) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(filtered) { m ->
-                Column(
-                    Modifier.clickable { selected = m },
-                ) {
-                    Box(
-                        Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1F2937)),
-                    ) {
+                Column(Modifier.clickable { selected = m }) {
+                    Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1F2937))) {
                         val poster = m.streamIcon ?: m.cover
                         if (!poster.isNullOrBlank()) {
                             AsyncImage(model = poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -125,35 +114,76 @@ fun MoviesScreen(creds: XtreamCredentials) {
 
 @androidx.media3.common.util.UnstableApi
 @Composable
-private fun MovieDetail(
-    movie: XtreamMovie,
-    playing: Boolean,
-    streamUrl: () -> String,
-    onPlay: () -> Unit,
-    onBack: () -> Unit,
-) {
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
-        if (playing) {
-            LiveVideoPlayer(streamUrl(), Modifier.fillMaxSize())
-        } else {
-            val poster = movie.streamIcon ?: movie.cover
-            if (!poster.isNullOrBlank()) {
-                AsyncImage(model = poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().background(Color(0xFF111827)))
+private fun MovieDetail(creds: XtreamCredentials, service: XtreamService, movie: XtreamMovie, onBack: () -> Unit) {
+    var playing by remember { mutableStateOf(false) }
+    var fullscreen by remember { mutableStateOf(false) }
+    var info by remember { mutableStateOf<VodInfo?>(null) }
+
+    LaunchedEffect(movie) {
+        info = runCatching { service.getVodInfo(creds.username, creds.password, movie.streamId).info }.getOrNull()
+    }
+
+    val streamUrl = remember(movie) {
+        XtreamClient.vodStreamUrl(creds.url, creds.username, creds.password, movie.streamId, movie.containerExtension ?: "mp4")
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxSize().background(Color(0xFF030712))) {
+            // Affiche fixe a gauche
+            Box(Modifier.width(260.dp).fillMaxHeight().background(Color(0xFF111827))) {
+                val poster = movie.streamIcon ?: movie.cover
+                if (!poster.isNullOrBlank()) {
+                    AsyncImage(model = poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                }
+                TextButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
+                    Text("< Retour", color = Color.White)
+                }
             }
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(movie.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    Spacer(Modifier.height(16.dp))
-                    Button(onClick = onPlay) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Lecture")
+
+            // Apercu (haut) + infos (bas) a droite
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
+                    if (playing) {
+                        LiveVideoPlayer(streamUrl, Modifier.fillMaxSize().clickable { fullscreen = true })
+                        IconButton(onClick = { fullscreen = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
+                            Icon(Icons.Filled.Fullscreen, contentDescription = "Plein écran", tint = Color.White)
+                        }
+                    } else {
+                        Box(Modifier.fillMaxSize().clickable { playing = true }, contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(48.dp))
+                                Spacer(Modifier.height(4.dp))
+                                Text("Lecture", color = Color.White)
+                            }
+                        }
+                    }
+                }
+                Box(Modifier.weight(1f).fillMaxWidth().background(Color(0xFF030712)).padding(16.dp)) {
+                    LazyColumn {
+                        item { Text(movie.name, fontWeight = FontWeight.Bold, fontSize = 18.sp) }
+                        val i = info
+                        if (i != null) {
+                            i.releaseDate?.let { d -> item { Spacer(Modifier.height(8.dp)); LabelValue("Date de sortie", d) } }
+                            i.genre?.let { g -> item { Spacer(Modifier.height(4.dp)); LabelValue("Genre", g) } }
+                            i.plot?.let { p -> item { Spacer(Modifier.height(8.dp)); LabelValue("Description", p) } }
+                            i.director?.let { d -> item { Spacer(Modifier.height(4.dp)); LabelValue("Réalisateur", d) } }
+                            i.cast?.let { c -> item { Spacer(Modifier.height(4.dp)); LabelValue("Casting", c) } }
+                        }
                     }
                 }
             }
         }
-        TextButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) {
-            Text("< Retour", color = Color.White)
+
+        if (fullscreen) {
+            FullscreenPlayer(streamUrl = streamUrl, title = movie.name, onClose = { fullscreen = false })
         }
+    }
+}
+
+@Composable
+private fun LabelValue(label: String, value: String) {
+    Column {
+        Text(label, color = PlexoraOrange, fontWeight = FontWeight.SemiBold, fontSize = MaterialTheme.typography.bodySmall.fontSize)
+        Text(value, color = Color.LightGray, fontSize = MaterialTheme.typography.bodySmall.fontSize)
     }
 }

@@ -72,3 +72,33 @@ data class SeriesEpisode(
     @Json(name = "container_extension") val containerExtension: String? = "mp4",
     val season: Int = 0,
 )
+
+@JsonClass(generateAdapter = true)
+data class EpgListingsWrapper(
+    @Json(name = "epg_listings") val epgListings: List<EpgItem>? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class EpgItem(
+    val title: String = "",
+    val description: String? = null,
+    val start: String = "",
+    val end: String = "",
+    @Json(name = "start_timestamp") val startTimestamp: Long = 0,
+    @Json(name = "stop_timestamp") val stopTimestamp: Long = 0,
+    @Json(name = "now_playing") val nowPlaying: Int = 0,
+)
+
+@JsonClass(generateAdapter = true)
+data class VodInfoWrapper(
+    val info: VodInfo? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class VodInfo(
+    val plot: String? = null,
+    val cast: String? = null,
+    val director: String? = null,
+    val genre: String? = null,
+    @Json(name = "release_date") val releaseDate: String? = null,
+)
