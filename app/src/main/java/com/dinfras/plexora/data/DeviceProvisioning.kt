@@ -25,8 +25,8 @@ fun getDeviceId(context: Context): String {
 // jamais la clé service_role côté client). Voir supabase/schema.sql pour la
 // table "devices" attendue.
 object SupabaseConfig {
-    const val URL = "" // ex: https://xxxxx.supabase.co
-    const val ANON_KEY = ""
+    const val URL = "https://cnsgyoirnhkjmklmzklh.supabase.co"
+    const val ANON_KEY = "sb_publishable_SUTpOhDg71DlUWfgvGErDQ_dBKUJLJy"
 }
 
 object DeviceProvisioningClient {
