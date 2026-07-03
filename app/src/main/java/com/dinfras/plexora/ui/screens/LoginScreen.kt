@@ -1,0 +1,128 @@
+package com.dinfras.plexora.ui.screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.dinfras.plexora.data.*
+import kotlinx.coroutines.launch
+
+private sealed interface LoginState {
+    data object CheckingProvisioning : LoginState
+    data object Manual : LoginState
+    data object LoggingIn : LoginState
+}
+
+@Composable
+fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val deviceId = remember { getDeviceId(context) }
+
+    var state by remember { mutableStateOf<LoginState>(LoginState.CheckingProvisioning) }
+    var url by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    // 1) Identifiants deja enregistres localement -> connexion directe
+    // 2) Sinon, appareil associe a une playlist via Supabase (device_id) -> auto-config
+    // 3) Sinon, formulaire manuel (comme la version web)
+    LaunchedEffect(Unit) {
+        val saved = CredentialsStore.load(context)
+        if (saved != null) {
+            onLoggedIn(saved)
+            return@LaunchedEffect
+        }
+        val provisioned = DeviceProvisioningClient.lookup(deviceId)
+        if (provisioned != null) {
+            CredentialsStore.save(context, provisioned)
+            onLoggedIn(provisioned)
+        } else {
+            state = LoginState.Manual
+        }
+    }
+
+    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+        when (state) {
+            LoginState.CheckingProvisioning -> CircularProgressIndicator()
+            else -> Column(
+                Modifier.widthIn(max = 420.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("Plexora", fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text("Connecte-toi avec tes identifiants Xtream", fontSize = 14.sp)
+                Spacer(Modifier.height(24.dp))
+
+                OutlinedTextField(
+                    value = url, onValueChange = { url = it },
+                    label = { Text("URL du serveur") },
+                    placeholder = { Text("http://monserveur.com") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = username, onValueChange = { username = it },
+                    label = { Text("Nom d'utilisateur") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = password, onValueChange = { password = it },
+                    label = { Text("Mot de passe") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                error?.let {
+                    Spacer(Modifier.height(12.dp))
+                    Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                }
+
+                Spacer(Modifier.height(20.dp))
+                Button(
+                    onClick = {
+                        error = null
+                        state = LoginState.LoggingIn
+                        scope.launch {
+                            runCatching {
+                                val creds = XtreamCredentials(url, username, password)
+                                val info = XtreamClient.create(creds.url).getAccountInfo(creds.username, creds.password)
+                                if (info.userInfo?.auth != 1) error("Identifiants incorrects.")
+                                CredentialsStore.save(context, creds)
+                                onLoggedIn(creds)
+                            }.onFailure {
+                                error = "Impossible de joindre le serveur.\n(${it.message})"
+                                state = LoginState.Manual
+                            }
+                        }
+                    },
+                    enabled = state != LoginState.LoggingIn,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (state == LoginState.LoggingIn) "Connexion..." else "Se connecter")
+                }
+
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    "Identifiant de cet appareil (pour association playlist) :\n$deviceId",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                )
+            }
+        }
+    }
+}
