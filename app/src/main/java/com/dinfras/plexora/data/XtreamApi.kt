@@ -29,6 +29,42 @@ interface XtreamService {
         @Query("password") password: String,
         @Query("action") action: String = "get_live_streams",
     ): List<XtreamChannel>
+
+    @GET("player_api.php")
+    suspend fun getVodCategories(
+        @Query("username") username: String,
+        @Query("password") password: String,
+        @Query("action") action: String = "get_vod_categories",
+    ): List<XtreamCategory>
+
+    @GET("player_api.php")
+    suspend fun getVodStreams(
+        @Query("username") username: String,
+        @Query("password") password: String,
+        @Query("action") action: String = "get_vod_streams",
+    ): List<XtreamMovie>
+
+    @GET("player_api.php")
+    suspend fun getSeriesCategories(
+        @Query("username") username: String,
+        @Query("password") password: String,
+        @Query("action") action: String = "get_series_categories",
+    ): List<XtreamCategory>
+
+    @GET("player_api.php")
+    suspend fun getSeriesList(
+        @Query("username") username: String,
+        @Query("password") password: String,
+        @Query("action") action: String = "get_series",
+    ): List<XtreamSeries>
+
+    @GET("player_api.php")
+    suspend fun getSeriesInfo(
+        @Query("username") username: String,
+        @Query("password") password: String,
+        @Query("series_id") seriesId: Int,
+        @Query("action") action: String = "get_series_info",
+    ): SeriesInfoWrapper
 }
 
 // Client HTTP natif : contrairement au WebView, aucune contrainte CORS ici —
@@ -54,9 +90,17 @@ object XtreamClient {
             .create(XtreamService::class.java)
     }
 
-    fun liveStreamUrl(baseUrl: String, username: String, password: String, streamId: Int): String {
+    private fun schemed(baseUrl: String): String {
         val normalized = baseUrl.trim().trimEnd('/')
-        val withScheme = if (!normalized.startsWith("http")) "http://$normalized" else normalized
-        return "$withScheme/live/$username/$password/$streamId.m3u8"
+        return if (!normalized.startsWith("http")) "http://$normalized" else normalized
     }
+
+    fun liveStreamUrl(baseUrl: String, username: String, password: String, streamId: Int): String =
+        "${schemed(baseUrl)}/live/$username/$password/$streamId.m3u8"
+
+    fun vodStreamUrl(baseUrl: String, username: String, password: String, streamId: Int, ext: String): String =
+        "${schemed(baseUrl)}/movie/$username/$password/$streamId.$ext"
+
+    fun seriesStreamUrl(baseUrl: String, username: String, password: String, episodeId: String, ext: String): String =
+        "${schemed(baseUrl)}/series/$username/$password/$episodeId.$ext"
 }

@@ -46,6 +46,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.tv:tv-foundation:1.0.0-alpha11")
     implementation("androidx.tv:tv-material:1.0.0")
+    implementation("io.coil-kt:coil-compose:2.7.0")
 
     // Lecteur video natif — gere HEVC/Dolby nativement, contrairement au WebView
     implementation("androidx.media3:media3-exoplayer:1.5.1")

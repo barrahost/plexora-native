@@ -6,7 +6,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
 
-private val Context.dataStore by preferencesDataStore(name = "plexora_prefs")
+internal val Context.dataStore by preferencesDataStore(name = "plexora_prefs")
 
 private val KEY_URL = stringPreferencesKey("server_url")
 private val KEY_USER = stringPreferencesKey("username")
