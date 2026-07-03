@@ -24,14 +24,15 @@ fun RadioScreen(creds: XtreamCredentials) {
     var stations by remember { mutableStateOf<List<XtreamChannel>>(emptyList()) }
     var active by remember { mutableStateOf<XtreamChannel?>(null) }
     var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(creds) {
         runCatching {
             val cats = service.getLiveCategories(creds.username, creds.password)
             val radioCatIds = cats.filter { it.categoryName.contains("radio", ignoreCase = true) }.map { it.categoryId }.toSet()
-            val all = service.getLiveStreams(creds.username, creds.password)
+            val all = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
             stations = all.filter { it.categoryId in radioCatIds }
-        }
+        }.onFailure { error = it.message ?: it.toString() }
         loading = false
     }
 
@@ -40,6 +41,10 @@ fun RadioScreen(creds: XtreamCredentials) {
         return
     }
 
+    if (error != null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Erreur de chargement :\n$error", color = Color.Red) }
+        return
+    }
     if (stations.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Aucune station radio disponible sur cet abonnement.", color = Color.Gray)

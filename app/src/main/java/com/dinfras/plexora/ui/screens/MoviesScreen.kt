@@ -38,12 +38,13 @@ fun MoviesScreen(creds: XtreamCredentials) {
     var selected by remember { mutableStateOf<XtreamMovie?>(null) }
     var playing by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(creds) {
         runCatching {
             categories = service.getVodCategories(creds.username, creds.password)
-            movies = service.getVodStreams(creds.username, creds.password)
-        }
+            movies = service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
+        }.onFailure { error = it.message ?: it.toString() }
         loading = false
     }
 
@@ -53,6 +54,10 @@ fun MoviesScreen(creds: XtreamCredentials) {
 
     if (loading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        return
+    }
+    if (error != null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Erreur de chargement :\n$error", color = Color.Red) }
         return
     }
 

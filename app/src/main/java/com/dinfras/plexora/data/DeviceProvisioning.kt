@@ -2,9 +2,7 @@ package com.dinfras.plexora.data
 
 import android.content.Context
 import android.provider.Settings
-import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -39,9 +37,8 @@ private data class PlaylistLookupRow(
 )
 
 object DeviceProvisioningClient {
-    private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
     private val listType = Types.newParameterizedType(List::class.java, PlaylistLookupRow::class.java)
-    private val adapter = moshi.adapter<List<PlaylistLookupRow>>(listType)
+    private val adapter = MoshiProvider.instance.adapter<List<PlaylistLookupRow>>(listType)
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)

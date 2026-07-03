@@ -1,7 +1,5 @@
 package com.dinfras.plexora.data
 
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
@@ -70,11 +68,9 @@ interface XtreamService {
 // Client HTTP natif : contrairement au WebView, aucune contrainte CORS ici —
 // c'est exactement ce qui nous manquait dans la version Capacitor.
 object XtreamClient {
-    private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
     fun create(baseUrl: String): XtreamService {
@@ -85,7 +81,7 @@ object XtreamClient {
         return Retrofit.Builder()
             .baseUrl(normalized)
             .client(http)
-            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .addConverterFactory(MoshiConverterFactory.create(MoshiProvider.instance))
             .build()
             .create(XtreamService::class.java)
     }

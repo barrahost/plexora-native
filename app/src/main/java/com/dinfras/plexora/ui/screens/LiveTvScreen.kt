@@ -26,12 +26,14 @@ fun LiveTvScreen(creds: XtreamCredentials) {
     var selectedCat by remember { mutableStateOf<String?>(null) }
     var activeChannel by remember { mutableStateOf<XtreamChannel?>(null) }
     var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(creds) {
         runCatching {
             categories = service.getLiveCategories(creds.username, creds.password)
-            channels = service.getLiveStreams(creds.username, creds.password)
-        }
+            // streamId=0 = entree illisible (type inattendu cote serveur) -> ignoree
+            channels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
+        }.onFailure { error = it.message ?: it.toString() }
         loading = false
     }
 
@@ -41,6 +43,12 @@ fun LiveTvScreen(creds: XtreamCredentials) {
 
     if (loading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        return
+    }
+    if (error != null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Erreur de chargement :\n$error", color = Color.Red)
+        }
         return
     }
 
