@@ -1,0 +1,6 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/dinfras/public_html/plexora/plexora-native-apk/
+    - /bin/mkdir -p $DEPLOYPATH
+    - /bin/cp releases/plexora-native.apk $DEPLOYPATH/plexora-native.apk
