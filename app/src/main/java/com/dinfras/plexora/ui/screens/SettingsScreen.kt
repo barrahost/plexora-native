@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 private data class BufferOption(val mode: BufferMode, val label: String, val desc: String)
 
 private val BUFFER_OPTIONS = listOf(
+    BufferOption(BufferMode.NONE, "Aucun", "Latence minimale, très sensible aux coupures. Pour réseau très stable uniquement."),
     BufferOption(BufferMode.SMALL, "Faible", "Réaction rapide, plus sensible aux coupures sur réseau instable."),
     BufferOption(BufferMode.MEDIUM, "Moyen", "Équilibre recommandé pour la plupart des connexions."),
     BufferOption(BufferMode.HIGH, "Élevé", "Absorbe les ralentissements serveur — moins de coupures."),

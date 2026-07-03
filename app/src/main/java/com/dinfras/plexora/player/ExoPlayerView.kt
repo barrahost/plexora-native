@@ -25,13 +25,14 @@ fun LiveVideoPlayer(streamUrl: String, modifier: Modifier = Modifier) {
     }
 
     val exoPlayer = remember(streamUrl, bufferMode) {
-        val (minMs, maxMs) = when (bufferMode) {
-            BufferMode.SMALL -> 5_000 to 15_000
-            BufferMode.MEDIUM -> 15_000 to 30_000
-            BufferMode.HIGH -> 30_000 to 60_000
+        val (minMs, maxMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs) = when (bufferMode) {
+            BufferMode.NONE -> intArrayOf(1_000, 3_000, 500, 500)
+            BufferMode.SMALL -> intArrayOf(5_000, 15_000, 2_000, 5_000)
+            BufferMode.MEDIUM -> intArrayOf(15_000, 30_000, 2_000, 5_000)
+            BufferMode.HIGH -> intArrayOf(30_000, 60_000, 2_000, 5_000)
         }
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(minMs, maxMs, 2_000, 5_000)
+            .setBufferDurationsMs(minMs, maxMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs)
             .build()
         ExoPlayer.Builder(context)
             .setLoadControl(loadControl)

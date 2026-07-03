@@ -5,7 +5,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.first
 
-enum class BufferMode { SMALL, MEDIUM, HIGH }
+enum class BufferMode { NONE, SMALL, MEDIUM, HIGH }
 
 private val KEY_BUFFER = stringPreferencesKey("buffer_mode")
 

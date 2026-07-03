@@ -50,7 +50,7 @@ fun ChannelLogo(name: String, iconUrl: String?, size: androidx.compose.ui.unit.D
                 contentDescription = null,
                 modifier = Modifier.size(size),
             ) {
-                val state by painter.state
+                val state = painter.state
                 if (state is AsyncImagePainter.State.Error) {
                     Text(initialsOf(name), color = Color.White, fontWeight = FontWeight.Bold, fontSize = (size.value / 2.6).sp)
                 } else {
