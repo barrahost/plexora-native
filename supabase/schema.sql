@@ -9,15 +9,28 @@ create table if not exists devices (
   created_at timestamptz not null default now()
 );
 
--- Lecture seule via la cle "anon" depuis l'app (aucune ecriture cote client) :
--- la gestion des associations se fait depuis le dashboard Supabase (table
--- editor) ou une future page d'admin, jamais depuis l'app installee chez le client.
 alter table devices enable row level security;
+-- Volontairement AUCUNE policy select sur la table : l'API REST generique
+-- (PostgREST) n'expose donc rien, meme avec la cle publishable (qui est de
+-- toute facon extractible de l'APK par n'importe qui). Le seul point d'acces
+-- est la fonction ci-dessous, qui ne renvoie jamais qu'UNE ligne (celle du
+-- device_id demande) — impossible de lister/dumper tous les clients d'un coup.
 
-create policy "Lecture publique par device_id"
-  on devices for select
-  using (true);
+create or replace function get_device_playlist(p_device_id text)
+returns table(server_url text, username text, password text)
+language sql
+security definer
+set search_path = public
+as $$
+  select server_url, username, password
+  from devices
+  where device_id = p_device_id
+  limit 1;
+$$;
 
--- Aucune policy insert/update/delete pour le role anon : uniquement gerable
--- via le dashboard Supabase (authentifie en tant que proprietaire du projet)
--- ou la cle service_role (jamais exposee dans l'app).
+-- Executable par la cle publishable (role anon), mais uniquement via cette
+-- fonction bornee — jamais un select libre sur la table.
+grant execute on function get_device_playlist(text) to anon;
+
+-- Gestion des associations : uniquement depuis le dashboard Supabase
+-- (authentifie proprietaire) ou la cle service_role, jamais depuis l'app.

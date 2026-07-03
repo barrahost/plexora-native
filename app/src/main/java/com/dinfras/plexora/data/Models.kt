@@ -38,13 +38,3 @@ data class XtreamChannel(
     @Json(name = "epg_channel_id") val epgChannelId: String? = null,
     @Json(name = "tv_archive") val tvArchive: Int = 0,
 )
-
-// Association device_id -> playlist, table Supabase "devices"
-@JsonClass(generateAdapter = true)
-data class DeviceProvision(
-    @Json(name = "device_id") val deviceId: String,
-    @Json(name = "server_url") val serverUrl: String,
-    val username: String,
-    val password: String,
-    val label: String? = null,
-)
