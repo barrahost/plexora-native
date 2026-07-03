@@ -36,29 +36,37 @@ private fun initialsOf(name: String): String {
 }
 
 // Logo de chaine avec repli elegant (initiales sur degrade) quand l'icone est
-// absente ou casse — reproduit le comportement de la version web.
+// absente ou casse — comme sur TiviMate, le fond reste transparent des que
+// l'image se charge correctement (pas de pastille colorée derriere un logo valide).
 @Composable
 fun ChannelLogo(name: String, iconUrl: String?, size: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+    if (iconUrl.isNullOrBlank()) {
+        FallbackBadge(name, size, modifier)
+        return
+    }
+    Box(modifier.size(size), contentAlignment = Alignment.Center) {
+        SubcomposeAsyncImage(
+            model = iconUrl,
+            contentDescription = null,
+            modifier = Modifier.size(size),
+        ) {
+            val state = painter.state
+            if (state is AsyncImagePainter.State.Error) {
+                FallbackBadge(name, size)
+            } else {
+                SubcomposeAsyncImageContent(modifier = Modifier.size(size), contentScale = ContentScale.Fit)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FallbackBadge(name: String, size: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
     val gradient = GRADIENTS[Math.floorMod(name.hashCode(), GRADIENTS.size)]
     Box(
         modifier.size(size).clip(RoundedCornerShape(6.dp)).background(Brush.linearGradient(gradient)),
         contentAlignment = Alignment.Center,
     ) {
-        if (!iconUrl.isNullOrBlank()) {
-            SubcomposeAsyncImage(
-                model = iconUrl,
-                contentDescription = null,
-                modifier = Modifier.size(size),
-            ) {
-                val state = painter.state
-                if (state is AsyncImagePainter.State.Error) {
-                    Text(initialsOf(name), color = Color.White, fontWeight = FontWeight.Bold, fontSize = (size.value / 2.6).sp)
-                } else {
-                    SubcomposeAsyncImageContent(modifier = Modifier.size(size), contentScale = ContentScale.Fit)
-                }
-            }
-        } else {
-            Text(initialsOf(name), color = Color.White, fontWeight = FontWeight.Bold, fontSize = (size.value / 2.6).sp)
-        }
+        Text(initialsOf(name), color = Color.White, fontWeight = FontWeight.Bold, fontSize = (size.value / 2.6).sp)
     }
 }

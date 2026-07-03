@@ -161,7 +161,7 @@ private fun ChannelRow(
 ) {
     var nowTitle by remember(channel) { mutableStateOf<String?>(null) }
     LaunchedEffect(channel) {
-        val epg = runCatching { service.getShortEpg(creds.username, creds.password, channel.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
+        val epg = runCatching { service.getShortEpgThrottled(creds.username, creds.password, channel.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
         val now = epg.firstOrNull { it.nowPlaying == 1 } ?: epg.firstOrNull()
         nowTitle = now?.let { decodeEpgText(it.title) }
     }
@@ -204,7 +204,7 @@ private fun ChannelSwitcherPanel(
 ) {
     var epg by remember(activeChannel) { mutableStateOf<List<EpgItem>>(emptyList()) }
     LaunchedEffect(activeChannel) {
-        epg = runCatching { service.getShortEpg(creds.username, creds.password, activeChannel.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
+        epg = runCatching { service.getShortEpgThrottled(creds.username, creds.password, activeChannel.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
     }
     val now = epg.firstOrNull { it.nowPlaying == 1 } ?: epg.firstOrNull()
 
@@ -304,7 +304,7 @@ private fun EpgGridOverlay(
     var focused by remember { mutableStateOf(activeChannel) }
     var focusedEpg by remember { mutableStateOf<List<EpgItem>>(emptyList()) }
     LaunchedEffect(focused) {
-        focusedEpg = runCatching { service.getShortEpg(creds.username, creds.password, focused.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
+        focusedEpg = runCatching { service.getShortEpgThrottled(creds.username, creds.password, focused.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
     }
     val now = focusedEpg.firstOrNull { it.nowPlaying == 1 } ?: focusedEpg.firstOrNull()
     val windowStart = remember { (now?.startTimestamp ?: (System.currentTimeMillis() / 1000)) }
@@ -392,7 +392,7 @@ private fun EpgGridRow(
 ) {
     var epg by remember(channel) { mutableStateOf<List<EpgItem>>(emptyList()) }
     LaunchedEffect(channel) {
-        epg = runCatching { service.getShortEpg(creds.username, creds.password, channel.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
+        epg = runCatching { service.getShortEpgThrottled(creds.username, creds.password, channel.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
     }
 
     Row(

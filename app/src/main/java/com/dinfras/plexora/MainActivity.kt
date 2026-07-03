@@ -7,6 +7,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -121,8 +123,12 @@ private fun AppContent() {
     if (current == null) {
         LoginScreen(onLoggedIn = { creds = it })
     } else {
+        // La barre laterale se replie en icones des qu'on navigue dans une
+        // section a plusieurs colonnes (TV/Films/Series), pour laisser la
+        // place au lecteur et aux informations EPG — comme sur TiviMate.
+        val sidebarExpanded = tab == Tab.SEARCH || tab == Tab.SETTINGS
         Row(Modifier.fillMaxSize()) {
-            Sidebar(active = tab, onSelect = { tab = it })
+            Sidebar(active = tab, expanded = sidebarExpanded, onSelect = { tab = it })
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (tab) {
                     Tab.SEARCH -> SearchScreen(current)
@@ -144,15 +150,26 @@ private fun AppContent() {
 // sections principales de l'appli, toujours visibles pour une navigation
 // rapide au D-pad.
 @Composable
-private fun Sidebar(active: Tab, onSelect: (Tab) -> Unit) {
+private fun Sidebar(active: Tab, expanded: Boolean, onSelect: (Tab) -> Unit) {
+    val width by animateDpAsState(if (expanded) 200.dp else 72.dp, animationSpec = tween(200), label = "sidebarWidth")
     Column(
-        Modifier.width(200.dp).fillMaxHeight().background(Color(0xFF0B0F19)).padding(vertical = 16.dp),
+        Modifier.width(width).fillMaxHeight().background(Color(0xFF0B0F19)).padding(vertical = 16.dp),
     ) {
-        Image(
-            painter = painterResource(R.drawable.logo_plexora_nav),
-            contentDescription = "Plexora",
-            modifier = Modifier.height(32.dp).padding(horizontal = 16.dp),
-        )
+        if (expanded) {
+            Image(
+                painter = painterResource(R.drawable.logo_plexora_nav),
+                contentDescription = "Plexora",
+                modifier = Modifier.height(32.dp).padding(horizontal = 16.dp),
+            )
+        } else {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Image(
+                    painter = painterResource(R.drawable.logo_plexora_login),
+                    contentDescription = "Plexora",
+                    modifier = Modifier.height(28.dp),
+                )
+            }
+        }
         Spacer(Modifier.height(24.dp))
         Tab.entries.forEach { t ->
             val isActive = t == active
@@ -160,12 +177,17 @@ private fun Sidebar(active: Tab, onSelect: (Tab) -> Unit) {
                 Modifier.fillMaxWidth()
                     .clickable { onSelect(t) }
                     .background(if (isActive) PlexoraViolet.copy(alpha = 0.25f) else Color.Transparent, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = if (expanded) 16.dp else 0.dp, vertical = 12.dp),
+                horizontalArrangement = if (expanded) Arrangement.Start else Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (!expanded) Spacer(Modifier.weight(1f))
                 Icon(t.icon, contentDescription = t.label, tint = if (isActive) PlexoraViolet else Color(0xFF9CA3AF))
-                Spacer(Modifier.width(12.dp))
-                Text(t.label, color = if (isActive) Color.White else Color(0xFF9CA3AF), fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal)
+                if (expanded) {
+                    Spacer(Modifier.width(12.dp))
+                    Text(t.label, color = if (isActive) Color.White else Color(0xFF9CA3AF), fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal)
+                }
+                if (!expanded) Spacer(Modifier.weight(1f))
             }
             Spacer(Modifier.height(4.dp))
         }

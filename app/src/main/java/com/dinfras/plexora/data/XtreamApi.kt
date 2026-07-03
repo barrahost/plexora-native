@@ -1,5 +1,7 @@
 package com.dinfras.plexora.data
 
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
@@ -81,6 +83,17 @@ interface XtreamService {
         @Query("action") action: String = "get_vod_info",
     ): VodInfoWrapper
 }
+
+// La grille EPG multi-chaines peut composer une dizaine de lignes a la fois,
+// chacune declenchant son propre appel get_short_epg. Sans limite, ces
+// appels concurrents saturent les connexions au serveur IPTV (souvent
+// mono-thread) et retardent/bloquent la requete du flux video en cours de
+// lecture. On borne donc les appels EPG concurrents pour ne jamais affamer
+// la lecture du direct.
+private val epgFetchLimiter = Semaphore(2)
+
+suspend fun XtreamService.getShortEpgThrottled(username: String, password: String, streamId: Int): EpgListingsWrapper =
+    epgFetchLimiter.withPermit { getShortEpg(username, password, streamId) }
 
 // Client HTTP natif : contrairement au WebView, aucune contrainte CORS ici —
 // c'est exactement ce qui nous manquait dans la version Capacitor.
