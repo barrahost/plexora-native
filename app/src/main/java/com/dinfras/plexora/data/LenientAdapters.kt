@@ -46,6 +46,23 @@ private object LenientDoubleAdapter {
     }
 }
 
+private object LenientLongAdapter {
+    @FromJson
+    fun fromJson(reader: JsonReader): Long {
+        return when (reader.peek()) {
+            JsonReader.Token.STRING -> reader.nextString().trim().toLongOrNull() ?: 0L
+            JsonReader.Token.NUMBER -> reader.nextDouble().toLong()
+            JsonReader.Token.NULL -> { reader.nextNull<Unit>(); 0L }
+            else -> { reader.skipValue(); 0L }
+        }
+    }
+
+    @ToJson
+    fun toJson(writer: JsonWriter, value: Long) {
+        writer.value(value)
+    }
+}
+
 private object LenientStringAdapter {
     @FromJson
     fun fromJson(reader: JsonReader): String {
@@ -68,6 +85,7 @@ object MoshiProvider {
     val instance: Moshi = Moshi.Builder()
         .add(LenientIntAdapter)
         .add(LenientDoubleAdapter)
+        .add(LenientLongAdapter)
         .add(LenientStringAdapter)
         .add(KotlinJsonAdapterFactory())
         .build()

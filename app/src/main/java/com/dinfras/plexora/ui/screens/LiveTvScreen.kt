@@ -57,8 +57,8 @@ fun LiveTvScreen(creds: XtreamCredentials) {
         return
     }
 
-    // Bouton Retour : ferme le plein ecran, puis deselectionne la chaine
-    BackHandler(enabled = fullscreen) { fullscreen = false }
+    // Bouton Retour : deselectionne la chaine (le plein ecran gere son propre
+    // Retour — guide TV puis sortie — dans LiveFullscreenPlayer)
     BackHandler(enabled = !fullscreen && activeChannel != null) { activeChannel = null }
 
     Box(Modifier.fillMaxSize()) {
@@ -121,10 +121,15 @@ fun LiveTvScreen(creds: XtreamCredentials) {
 
         val fsChannel = activeChannel
         if (fullscreen && fsChannel != null) {
-            val url = remember(fsChannel) {
-                XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, fsChannel.streamId)
-            }
-            FullscreenPlayer(streamUrl = url, title = fsChannel.name, onClose = { fullscreen = false })
+            LiveFullscreenPlayer(
+                creds = creds,
+                service = service,
+                categories = categories,
+                channels = channels,
+                channel = fsChannel,
+                onChannelChange = { activeChannel = it },
+                onExit = { fullscreen = false },
+            )
         }
     }
 }
