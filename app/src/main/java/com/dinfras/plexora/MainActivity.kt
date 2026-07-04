@@ -204,9 +204,10 @@ private fun Sidebar(active: Tab, expanded: Boolean, hidden: Boolean, onSelect: (
         Modifier.width(width).fillMaxHeight().background(Color(0xFF0B0F19)).padding(vertical = 16.dp)
             // Fleche DROITE : replie en icones (le focus continue normalement
             // vers le contenu) ; fleche GAUCHE : redeplie completement — sans
-            // attendre une validation OK, comme demande.
+            // attendre une validation OK, comme demande. Desactive une fois
+            // totalement masquee : elle ne doit reapparaitre que par Retour.
             .onKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown) {
+                if (event.type == KeyEventType.KeyDown && !hidden) {
                     when (event.key) {
                         Key.DirectionRight -> { onCollapse(); false }
                         Key.DirectionLeft -> { onExpand(); false }
