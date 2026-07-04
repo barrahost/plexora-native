@@ -16,11 +16,16 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.PlayerView
 import com.dinfras.plexora.data.BufferMode
 import com.dinfras.plexora.data.BufferPrefs
+import com.dinfras.plexora.data.DecoderMode
+import com.dinfras.plexora.data.PlayerPrefs
 
 // ExoPlayer lit nativement HEVC/H.265 et l'audio Dolby (AC3/EAC3) sans les
 // limitations du <video> WebView — c'était le principal blocage de la
@@ -33,21 +38,47 @@ import com.dinfras.plexora.data.BufferPrefs
 private const val PLAYER_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
+// Reordonne les decodeurs disponibles selon la preference materiel/logiciel,
+// sans jamais en exclure completement (retombe sur les autres si le type
+// demande n'existe pas sur l'appareil).
+private fun codecSelector(audioMode: DecoderMode, videoMode: DecoderMode): MediaCodecSelector =
+    MediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
+        val infos = MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
+        val mode = if (mimeType.startsWith("audio/")) audioMode else videoMode
+        when (mode) {
+            DecoderMode.AUTO -> infos
+            DecoderMode.HARDWARE -> infos.sortedByDescending { it.hardwareAccelerated }
+            DecoderMode.SOFTWARE -> infos.sortedBy { it.hardwareAccelerated }
+        }
+    }
+
+private data class PlayerSettings(
+    val bufferMode: BufferMode,
+    val audioDecoder: DecoderMode,
+    val videoDecoder: DecoderMode,
+    val tunneling: Boolean,
+)
+
 @UnstableApi
 @Composable
 fun LiveVideoPlayer(streamUrl: String, modifier: Modifier = Modifier, showLoadingIndicator: Boolean = true) {
     val context = LocalContext.current
-    val bufferMode by produceState(initialValue = BufferMode.MEDIUM) {
-        value = BufferPrefs.get(context)
+    val settings by produceState(initialValue = PlayerSettings(BufferMode.MEDIUM, DecoderMode.AUTO, DecoderMode.AUTO, false)) {
+        value = PlayerSettings(
+            bufferMode = BufferPrefs.get(context),
+            audioDecoder = PlayerPrefs.getAudioDecoder(context),
+            videoDecoder = PlayerPrefs.getVideoDecoder(context),
+            tunneling = PlayerPrefs.getTunneling(context),
+        )
     }
     // Aucun retour visuel pendant la mise en tampon jusqu'ici : l'ecran restait
     // noir/fige sans rien indiquer, contrairement a TiviMate qui affiche un
     // indicateur des le lancement de la lecture.
     var isBuffering by remember { mutableStateOf(true) }
 
-    val exoPlayer = remember(streamUrl, bufferMode) {
+    val exoPlayer = remember(streamUrl, settings) {
         isBuffering = true
-        val (minMs, maxMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs) = when (bufferMode) {
+        val (minMs, maxMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs) = when (settings.bufferMode) {
             BufferMode.NONE -> intArrayOf(1_000, 3_000, 500, 500)
             BufferMode.SMALL -> intArrayOf(5_000, 15_000, 2_000, 5_000)
             BufferMode.MEDIUM -> intArrayOf(15_000, 30_000, 2_000, 5_000)
@@ -61,8 +92,15 @@ fun LiveVideoPlayer(streamUrl: String, modifier: Modifier = Modifier, showLoadin
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(15_000)
             .setAllowCrossProtocolRedirects(true)
-        ExoPlayer.Builder(context)
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setMediaCodecSelector(codecSelector(settings.audioDecoder, settings.videoDecoder))
+            .setEnableDecoderFallback(true)
+        val trackSelector = DefaultTrackSelector(context).apply {
+            parameters = buildUponParameters().setTunnelingEnabled(settings.tunneling).build()
+        }
+        ExoPlayer.Builder(context, renderersFactory)
             .setLoadControl(loadControl)
+            .setTrackSelector(trackSelector)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .build()
             .apply {

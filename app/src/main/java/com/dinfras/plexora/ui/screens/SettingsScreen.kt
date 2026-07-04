@@ -38,6 +38,7 @@ private enum class SettingsSection(val label: String) {
     PLAYLISTS("Listes de lecture"),
     APPEARANCE("Apparence"),
     PLAYER("Lecteur"),
+    GENERAL("Général"),
 }
 
 // Sous-menu façon TiviMate : une colonne de sections a gauche, le contenu
@@ -72,6 +73,7 @@ fun SettingsScreen(
                 SettingsSection.PLAYLISTS -> PlaylistsSection(activeCreds, onSwitchPlaylist)
                 SettingsSection.APPEARANCE -> AppearanceSection()
                 SettingsSection.PLAYER -> PlayerSection(onLogout)
+                SettingsSection.GENERAL -> GeneralSection()
             }
         }
     }
@@ -163,13 +165,61 @@ private fun AppearanceSection() {
     }
 }
 
+private val DECODER_OPTIONS = listOf(
+    DecoderMode.AUTO to "Auto",
+    DecoderMode.HARDWARE to "Matériel",
+    DecoderMode.SOFTWARE to "Logiciel",
+)
+
+@Composable
+private fun DecoderPicker(label: String, value: DecoderMode, onChange: (DecoderMode) -> Unit) {
+    Text(label, fontWeight = FontWeight.SemiBold)
+    Spacer(Modifier.height(8.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        DECODER_OPTIONS.forEach { (mode, label2) ->
+            val active = value == mode
+            Text(
+                label2,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                    .background(if (active) PlexoraViolet.copy(alpha = 0.25f) else Color(0xFF1F2937))
+                    .clickable { onChange(mode) }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                color = if (active) Color.White else Color(0xFF9CA3AF),
+                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsToggle(label: String, desc: String?, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, fontWeight = FontWeight.SemiBold)
+            desc?.let { Text(it, color = Color.Gray, fontSize = MaterialTheme.typography.bodySmall.fontSize) }
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedTrackColor = PlexoraOrange))
+    }
+}
+
 @Composable
 private fun PlayerSection(onLogout: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val deviceId = remember { getDeviceId(context) }
     var buffer by remember { mutableStateOf(BufferMode.MEDIUM) }
-    LaunchedEffect(Unit) { buffer = BufferPrefs.get(context) }
+    var audioDecoder by remember { mutableStateOf(DecoderMode.AUTO) }
+    var videoDecoder by remember { mutableStateOf(DecoderMode.AUTO) }
+    var tunneling by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        buffer = BufferPrefs.get(context)
+        audioDecoder = PlayerPrefs.getAudioDecoder(context)
+        videoDecoder = PlayerPrefs.getVideoDecoder(context)
+        tunneling = PlayerPrefs.getTunneling(context)
+    }
 
     Column(Modifier.fillMaxSize().widthIn(max = 520.dp).verticalScroll(rememberScrollState())) {
         Text("Lecteur", fontWeight = FontWeight.SemiBold, fontSize = MaterialTheme.typography.titleMedium.fontSize)
@@ -197,6 +247,33 @@ private fun PlayerSection(onLogout: () -> Unit) {
             }
         }
 
+        Spacer(Modifier.height(28.dp))
+        DecoderPicker("Décodeur audio", audioDecoder) {
+            audioDecoder = it
+            scope.launch { PlayerPrefs.setAudioDecoder(context, it) }
+        }
+        Spacer(Modifier.height(20.dp))
+        DecoderPicker("Décodeur vidéo", videoDecoder) {
+            videoDecoder = it
+            scope.launch { PlayerPrefs.setVideoDecoder(context, it) }
+        }
+        Text(
+            "Essaie le décodeur logiciel si l'image ou le son est corrompu avec le décodeur matériel.",
+            color = Color.Gray,
+            fontSize = MaterialTheme.typography.bodySmall.fontSize,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
+        Spacer(Modifier.height(20.dp))
+        SettingsToggle(
+            "Lecture en tunnel",
+            "Peut fluidifier la lecture sur certaines TV Android certifiées. Désactive si l'image se fige.",
+            tunneling,
+        ) {
+            tunneling = it
+            scope.launch { PlayerPrefs.setTunneling(context, it) }
+        }
+
         Spacer(Modifier.height(32.dp))
         Button(onClick = {
             scope.launch {
@@ -211,6 +288,40 @@ private fun PlayerSection(onLogout: () -> Unit) {
             fontSize = MaterialTheme.typography.labelSmall.fontSize,
             color = Color.Gray,
         )
+    }
+}
+
+@Composable
+private fun GeneralSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var autoStart by remember { mutableStateOf(false) }
+    var resumeLast by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        autoStart = PlayerPrefs.getAutoStartOnBoot(context)
+        resumeLast = PlayerPrefs.getResumeLastChannel(context)
+    }
+
+    Column(Modifier.fillMaxSize().widthIn(max = 520.dp).verticalScroll(rememberScrollState())) {
+        Text("Général", fontWeight = FontWeight.SemiBold, fontSize = MaterialTheme.typography.titleMedium.fontSize)
+        Spacer(Modifier.height(16.dp))
+        SettingsToggle(
+            "Démarrer automatiquement au démarrage d'Android",
+            "Relance Plexora automatiquement apres un redemarrage de la TV/box.",
+            autoStart,
+        ) {
+            autoStart = it
+            scope.launch { PlayerPrefs.setAutoStartOnBoot(context, it) }
+        }
+        Spacer(Modifier.height(12.dp))
+        SettingsToggle(
+            "Reprendre la dernière chaîne",
+            "Preselectionne la derniere chaine regardee au retour sur l'onglet TV.",
+            resumeLast,
+        ) {
+            resumeLast = it
+            scope.launch { PlayerPrefs.setResumeLastChannel(context, it) }
+        }
     }
 }
 

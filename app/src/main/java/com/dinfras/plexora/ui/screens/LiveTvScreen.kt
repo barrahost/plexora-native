@@ -35,12 +35,24 @@ fun LiveTvScreen(creds: XtreamCredentials) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     LaunchedEffect(creds) {
         runCatching {
             categories = service.getLiveCategories(creds.username, creds.password)
             channels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
+            if (PlayerPrefs.getResumeLastChannel(context)) {
+                val lastId = PlayerPrefs.getLastChannelId(context)
+                if (lastId != null) activeChannel = channels.firstOrNull { it.streamId == lastId }
+            }
         }.onFailure { error = it.message ?: it.toString() }
         loading = false
+    }
+
+    // Retient la derniere chaine regardee pour la reprendre au prochain
+    // lancement si le reglage correspondant est active.
+    LaunchedEffect(activeChannel) {
+        activeChannel?.let { PlayerPrefs.setLastChannelId(context, it.streamId) }
     }
 
     val filteredChannels = remember(channels, selectedCat) {
