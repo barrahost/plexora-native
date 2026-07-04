@@ -61,7 +61,22 @@ data class XtreamSeries(
 
 @JsonClass(generateAdapter = true)
 data class SeriesInfoWrapper(
+    val info: SeriesFullInfo? = null,
     val episodes: Map<String, List<SeriesEpisode>>? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class SeriesFullInfo(
+    val name: String = "",
+    val cover: String? = null,
+    val plot: String? = null,
+    val cast: String? = null,
+    val director: String? = null,
+    val genre: String? = null,
+    @Json(name = "releaseDate") val releaseDate: String? = null,
+    val rating: String? = null,
+    @Json(name = "backdrop_path") val backdropPath: List<String>? = null,
+    @Json(name = "youtube_trailer") val youtubeTrailer: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -71,6 +86,13 @@ data class SeriesEpisode(
     val title: String? = null,
     @Json(name = "container_extension") val containerExtension: String? = "mp4",
     val season: Int = 0,
+    val info: EpisodeInfo? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class EpisodeInfo(
+    @Json(name = "movie_image") val movieImage: String? = null,
+    val plot: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

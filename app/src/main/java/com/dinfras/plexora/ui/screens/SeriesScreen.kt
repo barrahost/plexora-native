@@ -1,25 +1,39 @@
 package com.dinfras.plexora.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
@@ -27,6 +41,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,6 +49,7 @@ import coil.compose.AsyncImage
 import com.dinfras.plexora.data.*
 import com.dinfras.plexora.player.LiveVideoPlayer
 import com.dinfras.plexora.ui.theme.PlexoraOrange
+import kotlinx.coroutines.launch
 
 @androidx.media3.common.util.UnstableApi
 @Composable
@@ -158,122 +174,243 @@ fun SeriesScreen(creds: XtreamCredentials) {
     }
 }
 
+// Fiche serie en plein largeur (banniere + synopsis + actions + episodes en
+// bande horizontale), comme le repere fourni par l'utilisateur — remplace
+// l'ancienne disposition en 3 colonnes.
 @androidx.media3.common.util.UnstableApi
 @Composable
 fun SeriesDetail(series: XtreamSeries, creds: XtreamCredentials, service: XtreamService, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var info by remember { mutableStateOf<SeriesFullInfo?>(null) }
     var episodesBySeason by remember { mutableStateOf<Map<String, List<SeriesEpisode>>>(emptyMap()) }
     var selectedSeason by remember { mutableStateOf<String?>(null) }
     var activeEp by remember { mutableStateOf<SeriesEpisode?>(null) }
-    var playing by remember { mutableStateOf(false) }
     var fullscreen by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
+    var saved by remember { mutableStateOf(false) }
 
     LaunchedEffect(series) {
+        saved = MyListStore.isSaved(context, series.seriesId)
         runCatching {
-            val info = service.getSeriesInfo(creds.username, creds.password, series.seriesId)
-            episodesBySeason = info.episodes ?: emptyMap()
+            val result = service.getSeriesInfo(creds.username, creds.password, series.seriesId)
+            info = result.info
+            episodesBySeason = result.episodes ?: emptyMap()
             selectedSeason = episodesBySeason.keys.firstOrNull()
         }
         loading = false
     }
 
-    // Reinitialise l'apercu quand on change d'episode
-    LaunchedEffect(activeEp) { playing = false }
-    val ep = activeEp
-
-    // Bouton Retour : plein ecran -> lecture -> episode -> fiche serie -> grille
+    // Bouton Retour : plein ecran -> episode ouvert -> fiche serie
     BackHandler(enabled = fullscreen) { fullscreen = false }
-    BackHandler(enabled = !fullscreen && playing) { playing = false }
-    BackHandler(enabled = !fullscreen && !playing && activeEp != null) { activeEp = null }
-    BackHandler(enabled = !fullscreen && !playing && activeEp == null) { onBack() }
+    BackHandler(enabled = !fullscreen && activeEp != null) { activeEp = null }
+    BackHandler(enabled = !fullscreen && activeEp == null) { onBack() }
 
-    Box(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxSize().background(Color(0xFF030712))) {
-            // Affiche + saisons a gauche
-            Column(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827))) {
-                Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
-                    if (!series.cover.isNullOrBlank()) {
-                        AsyncImage(model = series.cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                    }
-                }
-                TextButton(onClick = onBack) { Text("< Retour") }
-                Text(series.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 12.dp))
+    val ep = activeEp
+    if (ep != null) {
+        EpisodePlayer(
+            series = series,
+            episode = ep,
+            creds = creds,
+            fullscreen = fullscreen,
+            onFullscreen = { fullscreen = it },
+            onBack = { activeEp = null },
+        )
+        return
+    }
+
+    Column(Modifier.fillMaxSize().background(Color(0xFF030712)).verticalScroll(rememberScrollState())) {
+        // Banniere : arriere-plan + degrade + titre/infos superposes
+        Box(Modifier.fillMaxWidth().height(320.dp)) {
+            val backdrop = info?.backdropPath?.firstOrNull() ?: series.cover
+            if (!backdrop.isNullOrBlank()) {
+                AsyncImage(model = backdrop, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFF030712), Color(0xFF030712).copy(alpha = 0.4f), Color.Transparent))))
+            Column(Modifier.align(Alignment.BottomStart).padding(24.dp).widthIn(max = 720.dp)) {
+                TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) { Text("< Retour", color = Color.White) }
+                Spacer(Modifier.height(4.dp))
+                val year = info?.releaseDate?.take(4)
+                Text(
+                    if (!year.isNullOrBlank()) "${series.name} ($year)" else series.name,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 26.sp,
+                )
                 Spacer(Modifier.height(8.dp))
-                if (loading) {
-                    CircularProgressIndicator(Modifier.padding(16.dp).size(20.dp), strokeWidth = 2.dp)
-                } else {
-                    LazyColumn {
-                        items(episodesBySeason.keys.toList()) { season ->
-                            val active = selectedSeason == season
-                            Text(
-                                "Saison $season",
-                                modifier = Modifier.fillMaxWidth().clickable { selectedSeason = season }
-                                    .background(if (active) PlexoraOrange.copy(alpha = 0.25f) else Color.Transparent)
-                                    .padding(12.dp, 10.dp),
-                                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                            )
-                        }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val rating = info?.rating?.toDoubleOrNull() ?: series.rating5based
+                    if (rating != null && rating > 0) {
+                        Text(
+                            String.format("%.1f", rating),
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            modifier = Modifier.background(PlexoraOrange, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                    }
+                    val meta = listOfNotNull(
+                        year,
+                        "${episodesBySeason.size} saison${if (episodesBySeason.size > 1) "s" else ""}".takeIf { episodesBySeason.isNotEmpty() },
+                        info?.genre,
+                    ).joinToString(" · ")
+                    if (meta.isNotBlank()) Text(meta, color = Color.Gray, fontSize = 13.sp)
+                }
+                info?.cast?.let { if (it.isNotBlank()) { Spacer(Modifier.height(6.dp)); Text("Acteurs : $it", color = Color(0xFF9CA3AF), fontSize = 13.sp, maxLines = 1) } }
+                info?.director?.let { if (it.isNotBlank()) { Text("Réalisateur : $it", color = Color(0xFF9CA3AF), fontSize = 13.sp, maxLines = 1) } }
+                info?.plot?.let { if (it.isNotBlank()) { Spacer(Modifier.height(8.dp)); Text(it, color = Color.LightGray, fontSize = 13.sp, maxLines = 3) } }
+            }
+        }
+
+        // Actions
+        val firstSeason = episodesBySeason.keys.firstOrNull()
+        val firstEp = episodesBySeason[selectedSeason ?: firstSeason]?.firstOrNull()
+        Row(Modifier.fillMaxWidth().padding(24.dp, 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ActionButton(
+                icon = Icons.Filled.PlayArrow,
+                label = if (firstEp != null) "Regarder S${selectedSeason ?: firstSeason} E${firstEp.episodeNum}" else "Regarder",
+                enabled = firstEp != null,
+                primary = true,
+            ) { activeEp = firstEp }
+            ActionButton(icon = Icons.Filled.OpenInNew, label = "Ouvrir dans un lecteur externe", enabled = firstEp != null) {
+                val e = firstEp ?: return@ActionButton
+                val url = XtreamClient.seriesStreamUrl(creds.url, creds.username, creds.password, e.id, e.containerExtension ?: "mp4")
+                runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(Uri.parse(url), "video/*")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        },
+                    )
+                }
+            }
+            val trailer = info?.youtubeTrailer
+            if (!trailer.isNullOrBlank()) {
+                ActionButton(icon = Icons.Filled.Movie, label = "Bande annonce") {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$trailer"))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
                     }
                 }
             }
+            ActionButton(icon = if (saved) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder, label = "Ajouter à ma liste") {
+                scope.launch { saved = MyListStore.toggle(context, series.seriesId) }
+            }
+        }
 
-            // Episodes au milieu
-            LazyColumn(Modifier.width(260.dp).fillMaxHeight().background(Color(0xFF0B0F19))) {
-                val episodes = episodesBySeason[selectedSeason] ?: emptyList()
-                items(episodes) { e ->
-                    val active = activeEp?.id == e.id
+        if (loading) {
+            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+            }
+            return@Column
+        }
+
+        // Saisons + episodes en bande horizontale
+        val seasons = episodesBySeason.keys.toList()
+        if (seasons.size > 1) {
+            Row(Modifier.padding(horizontal = 24.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                seasons.forEach { season ->
+                    val active = selectedSeason == season
                     Text(
-                        "E${e.episodeNum} — ${e.title ?: "Épisode ${e.episodeNum}"}",
-                        modifier = Modifier.fillMaxWidth().clickable { activeEp = e }
-                            .background(if (active) PlexoraOrange.copy(alpha = 0.2f) else Color.Transparent)
-                            .padding(16.dp, 12.dp),
+                        "Saison $season",
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp))
+                            .background(if (active) PlexoraOrange.copy(alpha = 0.25f) else Color(0xFF1F2937))
+                            .clickable { selectedSeason = season }
+                            .padding(14.dp, 8.dp),
+                        color = Color.White,
                         fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                     )
                 }
             }
-
-            // Apercu (haut) + infos episode (bas) a droite
-            Column(Modifier.weight(1f).fillMaxHeight()) {
-                Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
-                    if (ep == null) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("Sélectionne un épisode", color = Color.Gray)
-                        }
-                    } else {
-                        val url = remember(ep) {
-                            XtreamClient.seriesStreamUrl(creds.url, creds.username, creds.password, ep.id, ep.containerExtension ?: "mp4")
-                        }
-                        if (playing) {
-                            LiveVideoPlayer(url, Modifier.fillMaxSize().clickable { fullscreen = true })
-                            IconButton(onClick = { fullscreen = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
-                                Icon(Icons.Filled.Fullscreen, contentDescription = "Plein écran", tint = Color.White)
-                            }
-                        } else {
-                            Box(Modifier.fillMaxSize().clickable { playing = true }, contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(48.dp))
-                                    Spacer(Modifier.height(4.dp))
-                                    Text("Lecture", color = Color.White)
-                                }
-                            }
-                        }
-                    }
-                }
-                Box(Modifier.weight(1f).fillMaxWidth().background(Color(0xFF030712)).padding(16.dp)) {
-                    if (ep != null) {
-                        Column {
-                            Text("S$selectedSeason · E${ep.episodeNum} — ${ep.title ?: ""}", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
+            Spacer(Modifier.height(12.dp))
+        } else {
+            Text("Saison ${selectedSeason ?: ""}", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 24.dp))
+            Spacer(Modifier.height(12.dp))
         }
 
-        if (fullscreen && ep != null) {
-            val url = remember(ep) {
-                XtreamClient.seriesStreamUrl(creds.url, creds.username, creds.password, ep.id, ep.containerExtension ?: "mp4")
+        val episodes = episodesBySeason[selectedSeason] ?: emptyList()
+        val listState = rememberLazyListState()
+        if (episodes.isNotEmpty()) {
+            Box {
+                LazyRow(
+                    state = listState,
+                    contentPadding = PaddingValues(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(episodes) { e ->
+                        Column(Modifier.width(220.dp).clickable { activeEp = e }) {
+                            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(Color(0xFF1F2937))) {
+                                val thumb = e.info?.movieImage ?: series.cover
+                                if (!thumb.isNullOrBlank()) {
+                                    AsyncImage(model = thumb, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text("E${e.episodeNum} — ${e.title ?: "Épisode ${e.episodeNum}"}", color = Color.White, maxLines = 1, fontSize = 13.sp)
+                        }
+                    }
+                }
+                Text(
+                    "${(listState.firstVisibleItemIndex + 1).coerceAtMost(episodes.size)} / ${episodes.size}",
+                    color = Color.Gray,
+                    fontSize = 13.sp,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(end = 24.dp),
+                )
             }
-            FullscreenPlayer(streamUrl = url, title = "${series.name} — ${ep.title ?: "Épisode ${ep.episodeNum}"}", onClose = { fullscreen = false })
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun ActionButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, primary: Boolean = false, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (primary) Color.White else Color(0xFF1F2937))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .alpha(if (enabled) 1f else 0.5f),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = if (primary) Color.Black else Color.White, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, color = if (primary) Color.Black else Color.White, fontWeight = if (primary) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
+    }
+}
+
+@androidx.media3.common.util.UnstableApi
+@Composable
+private fun EpisodePlayer(
+    series: XtreamSeries,
+    episode: SeriesEpisode,
+    creds: XtreamCredentials,
+    fullscreen: Boolean,
+    onFullscreen: (Boolean) -> Unit,
+    onBack: () -> Unit,
+) {
+    val url = remember(episode) {
+        XtreamClient.seriesStreamUrl(creds.url, creds.username, creds.password, episode.id, episode.containerExtension ?: "mp4")
+    }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        LiveVideoPlayer(url, Modifier.fillMaxSize().clickable { onFullscreen(true) })
+        Row(Modifier.align(Alignment.TopStart).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "Retour", tint = Color.White) }
+            Text(
+                "${series.name} — E${episode.episodeNum} ${episode.title ?: ""}",
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        IconButton(onClick = { onFullscreen(true) }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
+            Icon(Icons.Filled.Fullscreen, contentDescription = "Plein écran", tint = Color.White)
+        }
+        if (fullscreen) {
+            FullscreenPlayer(streamUrl = url, title = "${series.name} — Épisode ${episode.episodeNum}", onClose = { onFullscreen(false) })
         }
     }
 }
