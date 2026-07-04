@@ -54,23 +54,33 @@ import kotlinx.coroutines.launch
 fun MoviesScreen(creds: XtreamCredentials) {
     val service = remember(creds) { XtreamClient.create(creds.url) }
 
-    val cached = remember { CatalogCache.getMovies() }
-    var categories by remember { mutableStateOf(cached?.categories ?: emptyList()) }
-    var movies by remember { mutableStateOf(cached?.movies ?: emptyList()) }
+    val screenContext = LocalContext.current
+    val memCached = remember { CatalogCache.getMovies() }
+    var categories by remember { mutableStateOf(memCached?.categories ?: emptyList()) }
+    var movies by remember { mutableStateOf(memCached?.movies ?: emptyList()) }
     var selectedCat by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<XtreamMovie?>(null) }
-    // Deja en cache : affichage instantane, pas d'ecran de chargement.
-    var loading by remember { mutableStateOf(cached == null) }
+    // Deja en cache (memoire ou disque) : affichage instantane, pas d'ecran de chargement.
+    var loading by remember { mutableStateOf(memCached == null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(creds) {
+        var haveData = memCached != null
+        if (!haveData) {
+            CatalogCache.loadMoviesFromDisk(screenContext)?.let {
+                categories = it.categories
+                movies = it.movies
+                loading = false
+                haveData = true
+            }
+        }
         runCatching {
             val newCategories = service.getVodCategories(creds.username, creds.password)
             val newMovies = service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
             categories = newCategories
             movies = newMovies
-            CatalogCache.setMovies(CatalogCache.MovieData(newCategories, newMovies))
-        }.onFailure { if (cached == null) error = it.message ?: it.toString() }
+            CatalogCache.setMovies(screenContext, CatalogCache.MovieData(newCategories, newMovies))
+        }.onFailure { if (!haveData) error = it.message ?: it.toString() }
         loading = false
     }
 

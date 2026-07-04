@@ -29,32 +29,49 @@ import com.dinfras.plexora.ui.theme.PlexoraOrange
 fun LiveTvScreen(creds: XtreamCredentials) {
     val service = remember(creds) { XtreamClient.create(creds.url) }
 
-    val cached = remember { CatalogCache.getLive() }
-    var categories by remember { mutableStateOf(cached?.categories ?: emptyList()) }
-    var channels by remember { mutableStateOf(cached?.channels ?: emptyList()) }
+    val memCached = remember { CatalogCache.getLive() }
+    var categories by remember { mutableStateOf(memCached?.categories ?: emptyList()) }
+    var channels by remember { mutableStateOf(memCached?.channels ?: emptyList()) }
     var selectedCat by remember { mutableStateOf<String?>(null) }
     var activeChannel by remember { mutableStateOf<XtreamChannel?>(null) }
     var fullscreen by remember { mutableStateOf(false) }
-    // Deja en cache : on affiche instantanement, pas d'ecran de chargement —
-    // comme TiviMate. Sinon, chargement classique la toute premiere fois.
-    var loading by remember { mutableStateOf(cached == null) }
+    // Deja en cache (memoire ou disque) : on affiche instantanement, pas
+    // d'ecran de chargement — comme TiviMate. Sinon, chargement classique.
+    var loading by remember { mutableStateOf(memCached == null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(creds) {
+        var haveData = memCached != null
+        if (!haveData) {
+            CatalogCache.loadLiveFromDisk(context)?.let {
+                categories = it.categories
+                channels = it.channels
+                loading = false
+                haveData = true
+            }
+        }
         runCatching {
             val newCategories = service.getLiveCategories(creds.username, creds.password)
             val newChannels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
             categories = newCategories
             channels = newChannels
-            CatalogCache.setLive(CatalogCache.LiveData(newCategories, newChannels))
+            CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
             if (PlayerPrefs.getResumeLastChannel(context)) {
                 val lastId = PlayerPrefs.getLastChannelId(context)
                 if (lastId != null) activeChannel = newChannels.firstOrNull { it.streamId == lastId }
             }
-        }.onFailure { if (cached == null) error = it.message ?: it.toString() }
+        }.onFailure { if (!haveData) error = it.message ?: it.toString() }
         loading = false
+    }
+
+    // Guide TV complet (XMLTV) telecharge une seule fois par session en
+    // arriere-plan, comme TiviMate — les panneaux EPG consultent ensuite ce
+    // cache local au lieu d'interroger le serveur chaine par chaine.
+    LaunchedEffect(creds) {
+        LocalEpgStore.loadFromDisk(context)
+        LocalEpgStore.refreshOnceIfNeeded(context, creds)
     }
 
     // Retient la derniere chaine regardee pour la reprendre au prochain
@@ -137,8 +154,7 @@ fun LiveTvScreen(creds: XtreamCredentials) {
                 val channel = activeChannel
                 var epg by remember(channel) { mutableStateOf<List<EpgItem>>(emptyList()) }
                 LaunchedEffect(channel) {
-                    epg = if (channel == null) emptyList()
-                    else runCatching { service.getShortEpgThrottled(creds.username, creds.password, channel.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
+                    epg = if (channel == null) emptyList() else service.getEpgForChannel(creds.username, creds.password, channel)
                 }
 
                 Box(Modifier.height(200.dp).fillMaxWidth().background(Color.Black)) {

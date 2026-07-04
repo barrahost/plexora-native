@@ -56,23 +56,33 @@ import kotlinx.coroutines.launch
 fun SeriesScreen(creds: XtreamCredentials) {
     val service = remember(creds) { XtreamClient.create(creds.url) }
 
-    val cached = remember { CatalogCache.getSeries() }
-    var categories by remember { mutableStateOf(cached?.categories ?: emptyList()) }
-    var seriesList by remember { mutableStateOf(cached?.series ?: emptyList()) }
+    val screenContext = LocalContext.current
+    val memCached = remember { CatalogCache.getSeries() }
+    var categories by remember { mutableStateOf(memCached?.categories ?: emptyList()) }
+    var seriesList by remember { mutableStateOf(memCached?.series ?: emptyList()) }
     var selectedCat by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<XtreamSeries?>(null) }
-    // Deja en cache : affichage instantane, pas d'ecran de chargement.
-    var loading by remember { mutableStateOf(cached == null) }
+    // Deja en cache (memoire ou disque) : affichage instantane, pas d'ecran de chargement.
+    var loading by remember { mutableStateOf(memCached == null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(creds) {
+        var haveData = memCached != null
+        if (!haveData) {
+            CatalogCache.loadSeriesFromDisk(screenContext)?.let {
+                categories = it.categories
+                seriesList = it.series
+                loading = false
+                haveData = true
+            }
+        }
         runCatching {
             val newCategories = service.getSeriesCategories(creds.username, creds.password)
             val newSeries = service.getSeriesList(creds.username, creds.password).filter { it.seriesId > 0 }
             categories = newCategories
             seriesList = newSeries
-            CatalogCache.setSeries(CatalogCache.SeriesData(newCategories, newSeries))
-        }.onFailure { if (cached == null) error = it.message ?: it.toString() }
+            CatalogCache.setSeries(screenContext, CatalogCache.SeriesData(newCategories, newSeries))
+        }.onFailure { if (!haveData) error = it.message ?: it.toString() }
         loading = false
     }
 

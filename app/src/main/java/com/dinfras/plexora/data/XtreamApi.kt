@@ -96,6 +96,15 @@ private val epgFetchLimiter = Semaphore(2)
 suspend fun XtreamService.getShortEpgThrottled(username: String, password: String, streamId: Int): EpgListingsWrapper =
     epgFetchLimiter.withPermit { getShortEpg(username, password, streamId) }
 
+// Comme TiviMate : consulte d'abord le XMLTV telecharge en local (instantane,
+// aucun appel reseau) — l'API par chaine ne sert plus que de repli si la
+// chaine est absente du guide local (pas de correspondance epg_channel_id,
+// ou telechargement XMLTV pas encore termine/disponible sur ce serveur).
+suspend fun XtreamService.getEpgForChannel(username: String, password: String, channel: XtreamChannel): List<EpgItem> {
+    LocalEpgStore.programsFor(channel.epgChannelId)?.let { if (it.isNotEmpty()) return it }
+    return runCatching { getShortEpgThrottled(username, password, channel.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
+}
+
 // Client HTTP natif : contrairement au WebView, aucune contrainte CORS ici —
 // c'est exactement ce qui nous manquait dans la version Capacitor.
 object XtreamClient {

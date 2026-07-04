@@ -21,7 +21,8 @@ object CredentialsStore {
         }
         val defaultLabel = runCatching { creds.username + " — " + creds.url.substringAfter("//") }.getOrDefault(creds.username)
         PlaylistsStore.upsert(context, defaultLabel, creds)
-        CatalogCache.clear()
+        CatalogCache.clear(context)
+        LocalEpgStore.clear(context)
     }
 
     suspend fun load(context: Context): XtreamCredentials? {
@@ -34,6 +35,7 @@ object CredentialsStore {
 
     suspend fun clear(context: Context) {
         context.dataStore.edit { it.clear() }
-        CatalogCache.clear()
+        CatalogCache.clear(context)
+        LocalEpgStore.clear(context)
     }
 }
