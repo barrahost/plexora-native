@@ -149,8 +149,30 @@ private fun AppContent() {
         }
     }
 
+    // null = verification du cache disque en cours, false = telechargement
+    // necessaire (1er lancement ou nouveau compte), true = catalogue deja
+    // disponible (memoire ou disque) — l'ecran de telechargement ne
+    // s'affiche donc qu'une fois par compte, pas a chaque redemarrage.
+    var catalogReady by remember(current) { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(current) {
+        if (current == null) return@LaunchedEffect
+        val hasLive = com.dinfras.plexora.data.CatalogCache.getLive() != null || com.dinfras.plexora.data.CatalogCache.loadLiveFromDisk(context) != null
+        val hasMovies = com.dinfras.plexora.data.CatalogCache.getMovies() != null || com.dinfras.plexora.data.CatalogCache.loadMoviesFromDisk(context) != null
+        val hasSeries = com.dinfras.plexora.data.CatalogCache.getSeries() != null || com.dinfras.plexora.data.CatalogCache.loadSeriesFromDisk(context) != null
+        catalogReady = hasLive && hasMovies && hasSeries
+    }
+
     if (current == null) {
         LoginScreen(onLoggedIn = { creds = it })
+    } else if (catalogReady != true) {
+        if (catalogReady == false) {
+            CatalogDownloadScreen(creds = current, onComplete = { catalogReady = true })
+        } else {
+            // Verification (rapide) du cache disque en cours.
+            Box(Modifier.fillMaxSize().background(PlexoraBackground), contentAlignment = Alignment.Center) {
+                androidx.compose.material3.CircularProgressIndicator()
+            }
+        }
     } else {
         Row(Modifier.fillMaxSize()) {
             Sidebar(
