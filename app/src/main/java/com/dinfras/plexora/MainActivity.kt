@@ -127,6 +127,11 @@ private fun AppContent() {
     // section a plusieurs colonnes — pas juste parce que l'onglet actif en
     // est une. Retour la rouvre si plus rien d'autre ne reste a fermer.
     var sidebarCollapsed by remember { mutableStateOf(false) }
+    // Disparait completement (pas juste en icones) des que l'ecran actif
+    // replie lui-meme sa colonne categories — chaque ecran (Live/Films/
+    // Series/Radio) signale ce moment via onCategoriesVisibleChange.
+    var categoriesVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(tab) { categoriesVisible = true }
 
     // Le plus superficiel : retour a l'onglet racine avant de quitter
     BackHandler(enabled = tab != Tab.LIVE) { tab = Tab.LIVE; sidebarCollapsed = false }
@@ -151,6 +156,7 @@ private fun AppContent() {
             Sidebar(
                 active = tab,
                 expanded = !sidebarCollapsed,
+                hidden = sidebarCollapsed && !categoriesVisible,
                 onSelect = {
                     tab = it
                     sidebarCollapsed = it != Tab.SEARCH && it != Tab.SETTINGS
@@ -161,10 +167,10 @@ private fun AppContent() {
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (tab) {
                     Tab.SEARCH -> SearchScreen(current)
-                    Tab.LIVE -> LiveTvScreen(current)
-                    Tab.MOVIES -> MoviesScreen(current)
-                    Tab.SERIES -> SeriesScreen(current)
-                    Tab.RADIO -> RadioScreen(current)
+                    Tab.LIVE -> LiveTvScreen(current, onCategoriesVisibleChange = { categoriesVisible = it })
+                    Tab.MOVIES -> MoviesScreen(current, onCategoriesVisibleChange = { categoriesVisible = it })
+                    Tab.SERIES -> SeriesScreen(current, onCategoriesVisibleChange = { categoriesVisible = it })
+                    Tab.RADIO -> RadioScreen(current, onCategoriesVisibleChange = { categoriesVisible = it })
                     Tab.SETTINGS -> SettingsScreen(
                         activeCreds = current,
                         onLogout = { creds = null; tab = Tab.LIVE },
@@ -184,8 +190,16 @@ private fun AppContent() {
 // sections principales de l'appli, toujours visibles pour une navigation
 // rapide au D-pad.
 @Composable
-private fun Sidebar(active: Tab, expanded: Boolean, onSelect: (Tab) -> Unit, onCollapse: () -> Unit, onExpand: () -> Unit) {
-    val width by animateDpAsState(if (expanded) 200.dp else 72.dp, animationSpec = tween(200), label = "sidebarWidth")
+private fun Sidebar(active: Tab, expanded: Boolean, hidden: Boolean, onSelect: (Tab) -> Unit, onCollapse: () -> Unit, onExpand: () -> Unit) {
+    val width by animateDpAsState(
+        when {
+            hidden -> 0.dp
+            expanded -> 200.dp
+            else -> 72.dp
+        },
+        animationSpec = tween(200),
+        label = "sidebarWidth",
+    )
     Column(
         Modifier.width(width).fillMaxHeight().background(Color(0xFF0B0F19)).padding(vertical = 16.dp)
             // Fleche DROITE : replie en icones (le focus continue normalement

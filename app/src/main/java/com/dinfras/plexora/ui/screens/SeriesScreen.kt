@@ -56,7 +56,7 @@ import kotlinx.coroutines.launch
 
 @androidx.media3.common.util.UnstableApi
 @Composable
-fun SeriesScreen(creds: XtreamCredentials) {
+fun SeriesScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -> Unit = {}) {
     val service = remember(creds) { XtreamClient.create(creds.url) }
 
     val screenContext = LocalContext.current
@@ -114,6 +114,7 @@ fun SeriesScreen(creds: XtreamCredentials) {
     // qu'on en valide une, fleche GAUCHE (ou Retour) la refait reapparaitre.
     var categoriesCollapsed by remember { mutableStateOf(false) }
     var categoryFocus by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(categoriesCollapsed) { onCategoriesVisibleChange(!categoriesCollapsed) }
 
     BackHandler(enabled = categoriesCollapsed) { categoriesCollapsed = false }
 

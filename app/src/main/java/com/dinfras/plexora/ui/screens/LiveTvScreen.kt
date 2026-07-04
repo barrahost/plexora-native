@@ -26,7 +26,7 @@ import com.dinfras.plexora.ui.theme.PlexoraOrange
 // (lecteur + EPG en dessous) -> plein ecran sur une seconde action.
 @androidx.media3.common.util.UnstableApi
 @Composable
-fun LiveTvScreen(creds: XtreamCredentials) {
+fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -> Unit = {}) {
     val service = remember(creds) { XtreamClient.create(creds.url) }
 
     val memCached = remember { CatalogCache.getLive() }
@@ -101,6 +101,7 @@ fun LiveTvScreen(creds: XtreamCredentials) {
     // Retour, la refait reapparaitre.
     var categoriesCollapsed by remember { mutableStateOf(false) }
     var categoryFocus by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(categoriesCollapsed) { onCategoriesVisibleChange(!categoriesCollapsed) }
 
     // Bouton Retour : rouvre les categories, puis deselectionne la chaine
     // (le plein ecran gere son propre Retour — guide TV puis sortie — dans LiveFullscreenPlayer)

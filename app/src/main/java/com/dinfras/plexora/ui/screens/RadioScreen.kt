@@ -26,7 +26,7 @@ import com.dinfras.plexora.ui.theme.PlexoraOrange
 // D-pad, orange = categorie active), fleche GAUCHE ou Retour les rouvre.
 @androidx.media3.common.util.UnstableApi
 @Composable
-fun RadioScreen(creds: XtreamCredentials) {
+fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -> Unit = {}) {
     val service = remember(creds) { XtreamClient.create(creds.url) }
 
     var categories by remember { mutableStateOf<List<XtreamCategory>>(emptyList()) }
@@ -70,6 +70,7 @@ fun RadioScreen(creds: XtreamCredentials) {
     // Films/Series. Inutile si une seule categorie radio existe.
     var categoriesCollapsed by remember { mutableStateOf(categories.size <= 1) }
     var categoryFocus by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(categoriesCollapsed) { onCategoriesVisibleChange(!categoriesCollapsed) }
 
     BackHandler(enabled = categoriesCollapsed && categories.size > 1) { categoriesCollapsed = false }
 
