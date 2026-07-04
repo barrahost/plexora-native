@@ -11,13 +11,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dinfras.plexora.data.*
@@ -75,6 +72,11 @@ fun RadioScreen(creds: XtreamCredentials) {
 
     BackHandler(enabled = categoriesCollapsed && categories.size > 1) { categoriesCollapsed = false }
 
+    val firstCategoryFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(categoriesCollapsed) {
+        if (!categoriesCollapsed) firstCategoryFocusRequester.requestFocus()
+    }
+
     Row(Modifier.fillMaxSize()) {
         if (categories.size > 1 && !categoriesCollapsed) {
             LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827))) {
@@ -85,6 +87,7 @@ fun RadioScreen(creds: XtreamCredentials) {
                         focused = categoryFocus == "__all__",
                         onFocus = { categoryFocus = "__all__" },
                         onClick = { selectedCat = null; categoriesCollapsed = true },
+                        modifier = Modifier.focusRequester(firstCategoryFocusRequester),
                     )
                 }
                 items(categories) { cat ->
@@ -99,17 +102,7 @@ fun RadioScreen(creds: XtreamCredentials) {
             }
         }
 
-        LazyColumn(
-            Modifier.width(300.dp).fillMaxHeight().background(Color(0xFF111827).copy(alpha = 0.92f))
-                .onKeyEvent { event ->
-                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft && categoriesCollapsed && categories.size > 1) {
-                        categoriesCollapsed = false
-                        true
-                    } else {
-                        false
-                    }
-                },
-        ) {
+        LazyColumn(Modifier.width(300.dp).fillMaxHeight().background(Color(0xFF111827).copy(alpha = 0.92f))) {
             items(filtered) { s ->
                 val isActive = active?.streamId == s.streamId
                 var isFocused by remember(s) { mutableStateOf(false) }

@@ -13,12 +13,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dinfras.plexora.data.*
@@ -87,6 +83,11 @@ fun LiveTvScreen(creds: XtreamCredentials) {
     BackHandler(enabled = categoriesCollapsed) { categoriesCollapsed = false }
     BackHandler(enabled = !categoriesCollapsed && !fullscreen && activeChannel != null) { activeChannel = null }
 
+    val firstCategoryFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(categoriesCollapsed) {
+        if (!categoriesCollapsed) firstCategoryFocusRequester.requestFocus()
+    }
+
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
             if (!categoriesCollapsed) {
@@ -98,6 +99,7 @@ fun LiveTvScreen(creds: XtreamCredentials) {
                             focused = categoryFocus == "__all__",
                             onFocus = { categoryFocus = "__all__" },
                             onClick = { selectedCat = null; categoriesCollapsed = true },
+                            modifier = Modifier.focusRequester(firstCategoryFocusRequester),
                         )
                     }
                     items(categories) { cat ->
@@ -112,17 +114,7 @@ fun LiveTvScreen(creds: XtreamCredentials) {
                 }
             }
 
-            LazyColumn(
-                Modifier.width(280.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = 0.92f))
-                    .onKeyEvent { event ->
-                        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft && categoriesCollapsed) {
-                            categoriesCollapsed = false
-                            true
-                        } else {
-                            false
-                        }
-                    },
-            ) {
+            LazyColumn(Modifier.width(280.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = 0.92f))) {
                 itemsIndexed(filteredChannels) { idx, ch ->
                     ChannelRow(idx, ch, activeChannel?.streamId == ch.streamId, creds, service) { activeChannel = ch }
                 }

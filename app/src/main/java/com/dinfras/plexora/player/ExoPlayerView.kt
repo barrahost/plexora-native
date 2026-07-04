@@ -124,10 +124,15 @@ fun LiveVideoPlayer(streamUrl: String, modifier: Modifier = Modifier, showLoadin
             modifier = Modifier.fillMaxSize(),
             factory = {
                 PlayerView(it).apply {
-                    player = exoPlayer
                     useController = false
                 }
             },
+            // Sans ce bloc, la vue garde le tout premier lecteur ExoPlayer
+            // cree (factory ne s'execute qu'une fois) — des qu'un nouveau
+            // lecteur est cree (ex. reglages charges en asynchrone juste
+            // apres le montage), l'ancien est libere mais la vue continue
+            // de le referencer : plus d'image, parfois du son residuel.
+            update = { it.player = exoPlayer },
         )
         if (showLoadingIndicator && isBuffering) {
             CircularProgressIndicator(

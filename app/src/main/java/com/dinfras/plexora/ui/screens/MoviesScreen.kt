@@ -27,6 +27,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -103,6 +105,14 @@ fun MoviesScreen(creds: XtreamCredentials) {
 
     BackHandler(enabled = categoriesCollapsed) { categoriesCollapsed = false }
 
+    val firstCategoryFocusRequester = remember { FocusRequester() }
+    // Sans ceci, le systeme place le curseur D-pad n'importe ou (ou nulle
+    // part) a l'ouverture de l'ecran, et il est invisible tant qu'on n'a
+    // pas appuye sur une touche — on force le focus sur la 1ere categorie.
+    LaunchedEffect(categoriesCollapsed) {
+        if (!categoriesCollapsed) firstCategoryFocusRequester.requestFocus()
+    }
+
     Row(Modifier.fillMaxSize()) {
         if (!categoriesCollapsed) {
             LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827))) {
@@ -113,6 +123,7 @@ fun MoviesScreen(creds: XtreamCredentials) {
                         focused = categoryFocus == "__all__",
                         onFocus = { categoryFocus = "__all__" },
                         onClick = { selectedCat = null; categoriesCollapsed = true },
+                        modifier = Modifier.focusRequester(firstCategoryFocusRequester),
                     )
                 }
                 items(categories) { cat ->
@@ -127,17 +138,7 @@ fun MoviesScreen(creds: XtreamCredentials) {
             }
         }
 
-        Column(
-            Modifier.weight(1f).fillMaxHeight().background(Color(0xFF030712))
-                .onKeyEvent { event ->
-                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft && categoriesCollapsed) {
-                        categoriesCollapsed = false
-                        true
-                    } else {
-                        false
-                    }
-                },
-        ) {
+        Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF030712))) {
             val fm = focused
             if (fm != null) {
                 MediaPreviewInfo(
@@ -182,7 +183,14 @@ fun MoviesScreen(creds: XtreamCredentials) {
 // Meme logique de double surbrillance que la sidebar : blanc = curseur
 // D-pad, orange = categorie reellement selectionnee.
 @Composable
-fun CategoryEntryRow(label: String, active: Boolean, focused: Boolean, onFocus: () -> Unit, onClick: () -> Unit) {
+fun CategoryEntryRow(
+    label: String,
+    active: Boolean,
+    focused: Boolean,
+    onFocus: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val bg = when {
         focused -> Color.White
         active -> PlexoraOrange.copy(alpha = 0.2f)
@@ -191,7 +199,7 @@ fun CategoryEntryRow(label: String, active: Boolean, focused: Boolean, onFocus: 
     val fg = if (focused) Color.Black else Color.White
     Text(
         label,
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
             .focusable()
             .onFocusChanged { if (it.isFocused) onFocus() }
             .clickable(onClick = onClick)

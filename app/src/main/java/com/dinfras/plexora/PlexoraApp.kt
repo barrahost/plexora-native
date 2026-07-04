@@ -21,9 +21,13 @@ class PlexoraApp : Application(), ImageLoaderFactory {
                 .build()
         }
         .diskCache {
+            // 2% du disque est bien trop petit pour un catalogue de plusieurs
+            // milliers d'affiches : le cache se vidait en permanence et
+            // rechargeait les memes images a chaque ouverture, d'ou la
+            // lenteur constante. Taille fixe et genereuse a la place.
             DiskCache.Builder()
                 .directory(cacheDir.resolve("image_cache"))
-                .maxSizePercent(0.02)
+                .maxSizeBytes(300L * 1024 * 1024)
                 .build()
         }
         .build()
