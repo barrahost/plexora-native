@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -326,13 +327,17 @@ private fun QuickBarChannelTile(channel: XtreamChannel, active: Boolean, onClick
 
 @Composable
 private fun CategoryRow(label: String, active: Boolean, onClick: () -> Unit) {
+    var isFocused by remember { mutableStateOf(false) }
     Text(
         label,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
-            .background(if (active) PlexoraOrange.copy(alpha = 0.25f) else Color.Transparent)
+        modifier = Modifier.fillMaxWidth()
+            .focusable()
+            .onFocusChanged { isFocused = it.isFocused }
+            .clickable(onClick = onClick)
+            .background(if (isFocused) Color.White else if (active) PlexoraOrange.copy(alpha = 0.25f) else Color.Transparent)
             .padding(16.dp, 12.dp),
-        color = Color.White,
-        fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+        color = if (isFocused) Color.Black else Color.White,
+        fontWeight = if (active || isFocused) FontWeight.Bold else FontWeight.Normal,
     )
 }
 
@@ -351,9 +356,22 @@ fun ChannelRow(
         val now = epg.firstOrNull { it.nowPlaying == 1 } ?: epg.firstOrNull()
         nowTitle = now?.let { decodeEpgText(it.title) }
     }
+    // Le curseur D-pad (blanc) est un etat distinct de "active" (chaine en
+    // cours de lecture, orange) — sinon impossible de savoir ou se trouve
+    // le curseur tant qu'on n'a pas encore valide une chaine.
+    var isFocused by remember { mutableStateOf(false) }
+    val bg = when {
+        isFocused -> Color.White
+        active -> PlexoraOrange.copy(alpha = 0.25f)
+        else -> Color.Transparent
+    }
+    val fg = if (isFocused) Color.Black else Color.White
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick)
-            .background(if (active) Color.White else Color.Transparent)
+        Modifier.fillMaxWidth()
+            .focusable()
+            .onFocusChanged { isFocused = it.isFocused }
+            .clickable(onClick = onClick)
+            .background(bg)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -362,15 +380,15 @@ fun ChannelRow(
         Column(Modifier.weight(1f)) {
             Text(
                 "${index + 1}  ${channel.name}",
-                color = if (active) Color.Black else Color.White,
-                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                color = if (isFocused) fg else if (active) PlexoraOrange else Color.White,
+                fontWeight = if (active || isFocused) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,
                 fontSize = 14.sp,
             )
             if (!nowTitle.isNullOrBlank()) {
                 Text(
                     nowTitle!!,
-                    color = if (active) Color(0xFF374151) else Color(0xFF9CA3AF),
+                    color = if (isFocused) Color(0xFF374151) else Color(0xFF9CA3AF),
                     fontSize = 12.sp,
                     maxLines = 1,
                 )

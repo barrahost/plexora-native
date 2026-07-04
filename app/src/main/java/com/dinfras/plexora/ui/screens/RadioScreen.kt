@@ -3,6 +3,7 @@ package com.dinfras.plexora.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
@@ -110,15 +112,23 @@ fun RadioScreen(creds: XtreamCredentials) {
         ) {
             items(filtered) { s ->
                 val isActive = active?.streamId == s.streamId
+                var isFocused by remember(s) { mutableStateOf(false) }
                 Row(
-                    modifier = Modifier.fillMaxWidth().clickable { active = s }
-                        .background(if (isActive) Color.White else Color.Transparent)
+                    modifier = Modifier.fillMaxWidth()
+                        .focusable()
+                        .onFocusChanged { isFocused = it.isFocused }
+                        .clickable { active = s }
+                        .background(if (isFocused) Color.White else if (isActive) PlexoraOrange.copy(alpha = 0.25f) else Color.Transparent)
                         .padding(12.dp, 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     ChannelLogo(s.name, s.streamIcon, size = 32.dp)
                     Spacer(Modifier.width(10.dp))
-                    Text(s.name, color = if (isActive) Color.Black else Color.White, fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal)
+                    Text(
+                        s.name,
+                        color = if (isFocused) Color.Black else if (isActive) PlexoraOrange else Color.White,
+                        fontWeight = if (isActive || isFocused) FontWeight.Bold else FontWeight.Normal,
+                    )
                 }
             }
         }

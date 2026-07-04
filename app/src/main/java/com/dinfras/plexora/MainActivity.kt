@@ -32,11 +32,15 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
+import com.dinfras.plexora.data.UiPrefs
 import com.dinfras.plexora.data.XtreamCredentials
+import com.dinfras.plexora.ui.AppUiState
 import com.dinfras.plexora.ui.screens.*
 import com.dinfras.plexora.ui.theme.PlexoraBackground
 import com.dinfras.plexora.ui.theme.PlexoraTheme
@@ -66,15 +70,19 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     var showSplash by remember { mutableStateOf(true) }
                     LaunchedEffect(Unit) {
+                        AppUiState.textScale.floatValue = UiPrefs.getTextScale(this@MainActivity)
                         delay(1000)
                         showSplash = false
                     }
 
-                    if (showSplash) {
-                        SplashScreen()
-                    } else {
-                        Box(Modifier.fillMaxSize().padding(TvSafeArea)) {
-                            AppContent()
+                    val density = LocalDensity.current
+                    CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = AppUiState.textScale.floatValue)) {
+                        if (showSplash) {
+                            SplashScreen()
+                        } else {
+                            Box(Modifier.fillMaxSize().padding(TvSafeArea)) {
+                                AppContent()
+                            }
                         }
                     }
                 }
@@ -108,8 +116,15 @@ private fun AppContent() {
     // LiveTvScreen) est toujours prioritaire sur ceux-ci, sans coordination
     // manuelle necessaire (contrairement au bricolage fait cote web).
 
+    // Ouverte par defaut (y compris au tout premier lancement, sur TV) : elle
+    // ne se replie en icones qu'apres une selection EXPLICITE (OK) d'une
+    // section a plusieurs colonnes — pas juste parce que l'onglet actif en
+    // est une. Retour la rouvre si plus rien d'autre ne reste a fermer.
+    var sidebarCollapsed by remember { mutableStateOf(false) }
+
     // Le plus superficiel : retour a l'onglet racine avant de quitter
-    BackHandler(enabled = tab != Tab.LIVE) { tab = Tab.LIVE }
+    BackHandler(enabled = tab != Tab.LIVE) { tab = Tab.LIVE; sidebarCollapsed = false }
+    BackHandler(enabled = tab == Tab.LIVE && sidebarCollapsed) { sidebarCollapsed = false }
 
     // Le fallback ultime : double-appui sous 2s pour quitter l'app
     var lastBack by remember { mutableStateOf(0L) }
@@ -126,12 +141,15 @@ private fun AppContent() {
     if (current == null) {
         LoginScreen(onLoggedIn = { creds = it })
     } else {
-        // La barre laterale se replie en icones des qu'on navigue dans une
-        // section a plusieurs colonnes (TV/Films/Series), pour laisser la
-        // place au lecteur et aux informations EPG — comme sur TiviMate.
-        val sidebarExpanded = tab == Tab.SEARCH || tab == Tab.SETTINGS
         Row(Modifier.fillMaxSize()) {
-            Sidebar(active = tab, expanded = sidebarExpanded, onSelect = { tab = it })
+            Sidebar(
+                active = tab,
+                expanded = !sidebarCollapsed,
+                onSelect = {
+                    tab = it
+                    sidebarCollapsed = it != Tab.SEARCH && it != Tab.SETTINGS
+                },
+            )
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (tab) {
                     Tab.SEARCH -> SearchScreen(current)

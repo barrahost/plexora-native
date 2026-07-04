@@ -131,12 +131,23 @@ private fun PlaylistsSection(activeCreds: XtreamCredentials, onSwitchPlaylist: (
     }
 }
 
+private val TEXT_SCALE_OPTIONS = listOf(
+    0.85f to "Petit",
+    1f to "Normal",
+    1.15f to "Grand",
+    1.3f to "Très grand",
+)
+
 @Composable
 private fun AppearanceSection() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var overlayAlpha by remember { mutableFloatStateOf(UiPrefs.DEFAULT_OVERLAY_ALPHA) }
-    LaunchedEffect(Unit) { overlayAlpha = UiPrefs.getOverlayAlpha(context) }
+    var textScale by remember { mutableFloatStateOf(UiPrefs.DEFAULT_TEXT_SCALE) }
+    LaunchedEffect(Unit) {
+        overlayAlpha = UiPrefs.getOverlayAlpha(context)
+        textScale = UiPrefs.getTextScale(context)
+    }
 
     Column(Modifier.fillMaxSize().widthIn(max = 520.dp).verticalScroll(rememberScrollState())) {
         Text("Apparence", fontWeight = FontWeight.SemiBold, fontSize = MaterialTheme.typography.titleMedium.fontSize)
@@ -161,6 +172,33 @@ private fun AppearanceSection() {
             )
             Spacer(Modifier.width(12.dp))
             Text("${(overlayAlpha * 100).toInt()}%", modifier = Modifier.widthIn(min = 40.dp))
+        }
+
+        Spacer(Modifier.height(28.dp))
+        Text("Taille du texte", fontWeight = FontWeight.SemiBold)
+        Text(
+            "S'applique immédiatement dans toute l'application.",
+            color = Color.Gray,
+            fontSize = MaterialTheme.typography.bodySmall.fontSize,
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TEXT_SCALE_OPTIONS.forEach { (scale, label) ->
+                val active = kotlin.math.abs(textScale - scale) < 0.01f
+                Text(
+                    label,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                        .background(if (active) PlexoraViolet.copy(alpha = 0.25f) else Color(0xFF1F2937))
+                        .clickable {
+                            textScale = scale
+                            com.dinfras.plexora.ui.AppUiState.textScale.floatValue = scale
+                            scope.launch { UiPrefs.setTextScale(context, scale) }
+                        }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    color = if (active) Color.White else Color(0xFF9CA3AF),
+                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                )
+            }
         }
     }
 }

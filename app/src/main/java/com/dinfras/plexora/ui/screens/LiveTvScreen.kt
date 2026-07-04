@@ -14,6 +14,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dinfras.plexora.data.*
@@ -70,26 +75,54 @@ fun LiveTvScreen(creds: XtreamCredentials) {
         return
     }
 
-    // Bouton Retour : deselectionne la chaine (le plein ecran gere son propre
-    // Retour — guide TV puis sortie — dans LiveFullscreenPlayer)
-    BackHandler(enabled = !fullscreen && activeChannel != null) { activeChannel = null }
+    // La colonne categories se replie des qu'on en valide une (OK), comme
+    // sur Films/Series, pour laisser plus de place a la liste des chaines
+    // et au programme. Fleche GAUCHE depuis la liste des chaines, ou
+    // Retour, la refait reapparaitre.
+    var categoriesCollapsed by remember { mutableStateOf(false) }
+    var categoryFocus by remember { mutableStateOf<String?>(null) }
+
+    // Bouton Retour : rouvre les categories, puis deselectionne la chaine
+    // (le plein ecran gere son propre Retour — guide TV puis sortie — dans LiveFullscreenPlayer)
+    BackHandler(enabled = categoriesCollapsed) { categoriesCollapsed = false }
+    BackHandler(enabled = !categoriesCollapsed && !fullscreen && activeChannel != null) { activeChannel = null }
 
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827))) {
-                items(categories) { cat ->
-                    val active = selectedCat == cat.categoryId
-                    Text(
-                        cat.categoryName,
-                        modifier = Modifier.fillMaxWidth().clickable { selectedCat = cat.categoryId }
-                            .background(if (active) PlexoraOrange.copy(alpha = 0.2f) else Color.Transparent)
-                            .padding(16.dp, 12.dp),
-                        fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                    )
+            if (!categoriesCollapsed) {
+                LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827))) {
+                    item {
+                        CategoryEntryRow(
+                            label = "Toutes les chaînes",
+                            active = selectedCat == null,
+                            focused = categoryFocus == "__all__",
+                            onFocus = { categoryFocus = "__all__" },
+                            onClick = { selectedCat = null; categoriesCollapsed = true },
+                        )
+                    }
+                    items(categories) { cat ->
+                        CategoryEntryRow(
+                            label = cat.categoryName,
+                            active = selectedCat == cat.categoryId,
+                            focused = categoryFocus == cat.categoryId,
+                            onFocus = { categoryFocus = cat.categoryId },
+                            onClick = { selectedCat = cat.categoryId; categoriesCollapsed = true },
+                        )
+                    }
                 }
             }
 
-            LazyColumn(Modifier.width(280.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = 0.92f))) {
+            LazyColumn(
+                Modifier.width(280.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = 0.92f))
+                    .onKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft && categoriesCollapsed) {
+                            categoriesCollapsed = false
+                            true
+                        } else {
+                            false
+                        }
+                    },
+            ) {
                 itemsIndexed(filteredChannels) { idx, ch ->
                     ChannelRow(idx, ch, activeChannel?.streamId == ch.streamId, creds, service) { activeChannel = ch }
                 }
