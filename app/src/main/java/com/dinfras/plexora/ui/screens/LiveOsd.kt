@@ -151,7 +151,7 @@ private fun CategoryRow(label: String, active: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ChannelRow(
+fun ChannelRow(
     index: Int,
     channel: XtreamChannel,
     active: Boolean,
@@ -221,7 +221,7 @@ private fun ChannelSwitcherPanel(
 }
 
 @Composable
-private fun ProgramInfoCard(item: EpgItem, modifier: Modifier = Modifier) {
+fun ProgramInfoCard(item: EpgItem, modifier: Modifier = Modifier) {
     Column(
         modifier
             .widthIn(max = 340.dp)

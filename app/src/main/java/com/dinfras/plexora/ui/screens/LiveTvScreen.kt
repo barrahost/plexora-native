@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material3.*
@@ -76,26 +77,13 @@ fun LiveTvScreen(creds: XtreamCredentials) {
                 }
             }
 
-            LazyColumn(Modifier.width(280.dp).fillMaxHeight().background(Color(0xFF0B0F19))) {
-                items(filteredChannels) { ch ->
-                    val active = activeChannel?.streamId == ch.streamId
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { activeChannel = ch }
-                            .background(if (active) PlexoraOrange.copy(alpha = 0.2f) else Color.Transparent)
-                            .padding(12.dp, 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        ChannelLogo(ch.name, ch.streamIcon, size = 32.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            ch.name,
-                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                        )
-                    }
+            LazyColumn(Modifier.width(280.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = 0.92f))) {
+                itemsIndexed(filteredChannels) { idx, ch ->
+                    ChannelRow(idx, ch, activeChannel?.streamId == ch.streamId, creds, service) { activeChannel = ch }
                 }
             }
 
-            // Colonne 3 : petit apercu (haut) + grille de programmes multi-chaines (bas), jamais plein ecran ici
+            // Colonne 3 : petit apercu (haut, avec fiche programme flottante) + grille de programmes multi-chaines (bas)
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 val channel = activeChannel
                 Box(Modifier.height(200.dp).fillMaxWidth().background(Color.Black)) {
@@ -110,6 +98,15 @@ fun LiveTvScreen(creds: XtreamCredentials) {
                         LiveVideoPlayer(url, Modifier.fillMaxSize().clickable { fullscreen = true })
                         IconButton(onClick = { fullscreen = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
                             Icon(Icons.Filled.Fullscreen, contentDescription = "Plein écran", tint = Color.White)
+                        }
+
+                        var epg by remember(channel) { mutableStateOf<List<EpgItem>>(emptyList()) }
+                        LaunchedEffect(channel) {
+                            epg = runCatching { service.getShortEpgThrottled(creds.username, creds.password, channel.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
+                        }
+                        val now = epg.firstOrNull { it.nowPlaying == 1 } ?: epg.firstOrNull()
+                        if (now != null) {
+                            ProgramInfoCard(now, Modifier.align(Alignment.TopEnd).padding(12.dp))
                         }
                     }
                 }
