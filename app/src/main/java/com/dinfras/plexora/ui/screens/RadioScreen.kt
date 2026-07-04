@@ -7,10 +7,14 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -34,6 +38,7 @@ fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -
     var stations by remember { mutableStateOf<List<XtreamChannel>>(emptyList()) }
     var selectedCat by remember { mutableStateOf<String?>(null) }
     var active by remember { mutableStateOf<XtreamChannel?>(null) }
+    var pausedStation by remember { mutableStateOf<XtreamChannel?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -50,7 +55,7 @@ fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -
                 val newChannels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
                 CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
                 live = CatalogCache.LiveData(newCategories, newChannels)
-            }.onFailure { if (live == null) error = it.message ?: it.toString() }
+            }.onFailure { if (live == null) error = friendlyNetworkError(it) }
         }
         live?.let { data ->
             val radioCatIds = data.categories.filter { it.categoryName.contains("radio", ignoreCase = true) }.map { it.categoryId }.toSet()
@@ -125,7 +130,7 @@ fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -
                     modifier = Modifier.fillMaxWidth()
                         .onFocusChanged { isFocused = it.isFocused }
                         .focusable()
-                        .clickable { active = s }
+                        .clickable { active = s; pausedStation = null }
                         .background(if (isFocused) Color.White else if (isActive) PlexoraOrange.copy(alpha = 0.25f) else Color.Transparent)
                         .padding(12.dp, 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -143,17 +148,39 @@ fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -
 
         Box(Modifier.weight(1f).fillMaxHeight().background(Color.Black), contentAlignment = Alignment.Center) {
             val station = active
-            if (station == null) {
+            val paused = station == null && pausedStation != null
+            if (station == null && pausedStation == null) {
                 Text("Sélectionne une station", color = Color.Gray)
             } else {
+                val displayed = station ?: pausedStation!!
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    ChannelLogo(station.name, station.streamIcon, size = 96.dp)
+                    ChannelLogo(displayed.name, displayed.streamIcon, size = 96.dp)
                     Spacer(Modifier.height(12.dp))
-                    Text(station.name, color = Color.White, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(12.dp))
-                    val url = remember(station) { XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, station.streamId) }
-                    // Lecture audio : le player video sert de moteur de lecture, la surface reste noire
-                    Box(Modifier.size(1.dp)) { LiveVideoPlayer(url, Modifier.size(1.dp), showLoadingIndicator = false) }
+                    Text(displayed.name, color = Color.White, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(16.dp))
+                    IconButton(
+                        onClick = {
+                            if (paused) {
+                                active = pausedStation
+                                pausedStation = null
+                            } else {
+                                pausedStation = station
+                                active = null
+                            }
+                        },
+                        modifier = Modifier.size(56.dp).clip(androidx.compose.foundation.shape.CircleShape).background(PlexoraOrange),
+                    ) {
+                        Icon(
+                            if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                            contentDescription = if (paused) "Lecture" else "Pause",
+                            tint = Color.Black,
+                        )
+                    }
+                    if (station != null) {
+                        val url = remember(station) { XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, station.streamId) }
+                        // Lecture audio : le player video sert de moteur de lecture, la surface reste noire
+                        Box(Modifier.size(1.dp)) { LiveVideoPlayer(url, Modifier.size(1.dp), showLoadingIndicator = false) }
+                    }
                 }
             }
         }

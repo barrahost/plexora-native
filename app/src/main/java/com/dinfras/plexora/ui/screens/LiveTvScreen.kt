@@ -68,7 +68,7 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                 categories = newCategories
                 channels = newChannels
                 CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
-            }.onFailure { if (!haveData) error = it.message ?: it.toString() }
+            }.onFailure { if (!haveData) error = friendlyNetworkError(it) }
         }
         if (PlayerPrefs.getResumeLastChannel(context)) {
             val lastId = PlayerPrefs.getLastChannelId(context)

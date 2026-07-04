@@ -92,7 +92,7 @@ fun SeriesScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                 categories = newCategories
                 seriesList = newSeries
                 CatalogCache.setSeries(screenContext, CatalogCache.SeriesData(newCategories, newSeries))
-            }.onFailure { if (!haveData) error = it.message ?: it.toString() }
+            }.onFailure { if (!haveData) error = friendlyNetworkError(it) }
         }
         loading = false
     }

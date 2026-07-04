@@ -46,21 +46,21 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
             liveCount = liveChannels.count { it.categoryId !in radioCatIds }
             radioCount = liveChannels.count { it.categoryId in radioCatIds }
             CatalogCache.setLive(context, CatalogCache.LiveData(liveCats, liveChannels))
-        }.onFailure { error = it.message ?: it.toString() }
+        }.onFailure { error = friendlyNetworkError(it) }
 
         runCatching {
             val movieCats = service.getVodCategories(creds.username, creds.password)
             val movies = service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
             movieCount = movies.size
             CatalogCache.setMovies(context, CatalogCache.MovieData(movieCats, movies))
-        }.onFailure { if (error == null) error = it.message ?: it.toString() }
+        }.onFailure { if (error == null) error = friendlyNetworkError(it) }
 
         runCatching {
             val seriesCats = service.getSeriesCategories(creds.username, creds.password)
             val seriesList = service.getSeriesList(creds.username, creds.password).filter { it.seriesId > 0 }
             seriesCount = seriesList.size
             CatalogCache.setSeries(context, CatalogCache.SeriesData(seriesCats, seriesList))
-        }.onFailure { if (error == null) error = it.message ?: it.toString() }
+        }.onFailure { if (error == null) error = friendlyNetworkError(it) }
 
         // Le guide TV complet (XMLTV) peut etre volumineux — se telecharge
         // sur un scope independant de cet ecran (voir LocalEpgStore), pour

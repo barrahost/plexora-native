@@ -90,7 +90,7 @@ fun MoviesScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                 categories = newCategories
                 movies = newMovies
                 CatalogCache.setMovies(screenContext, CatalogCache.MovieData(newCategories, newMovies))
-            }.onFailure { if (!haveData) error = it.message ?: it.toString() }
+            }.onFailure { if (!haveData) error = friendlyNetworkError(it) }
         }
         loading = false
     }

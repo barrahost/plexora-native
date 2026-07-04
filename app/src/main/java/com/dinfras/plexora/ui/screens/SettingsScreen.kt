@@ -72,7 +72,7 @@ fun SettingsScreen(
             when (section) {
                 SettingsSection.PLAYLISTS -> PlaylistsSection(activeCreds, onSwitchPlaylist)
                 SettingsSection.APPEARANCE -> AppearanceSection()
-                SettingsSection.PLAYER -> PlayerSection(onLogout)
+                SettingsSection.PLAYER -> PlayerSection(activeCreds, onLogout)
                 SettingsSection.GENERAL -> GeneralSection()
             }
         }
@@ -251,7 +251,7 @@ private fun SettingsToggle(label: String, desc: String?, checked: Boolean, onChe
 }
 
 @Composable
-private fun PlayerSection(onLogout: () -> Unit) {
+private fun PlayerSection(activeCreds: XtreamCredentials, onLogout: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val deviceId = remember { getDeviceId(context) }
@@ -259,11 +259,16 @@ private fun PlayerSection(onLogout: () -> Unit) {
     var audioDecoder by remember { mutableStateOf(DecoderMode.AUTO) }
     var videoDecoder by remember { mutableStateOf(DecoderMode.AUTO) }
     var tunneling by remember { mutableStateOf(false) }
+    var expDate by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(Unit) {
         buffer = BufferPrefs.get(context)
         audioDecoder = PlayerPrefs.getAudioDecoder(context)
         videoDecoder = PlayerPrefs.getVideoDecoder(context)
         tunneling = PlayerPrefs.getTunneling(context)
+        runCatching {
+            val info = XtreamClient.create(activeCreds.url).getAccountInfo(activeCreds.username, activeCreds.password)
+            expDate = info.userInfo?.expDate?.toLongOrNull()
+        }
     }
 
     Column(Modifier.fillMaxSize().widthIn(max = 520.dp).verticalScroll(rememberScrollState())) {
@@ -319,7 +324,24 @@ private fun PlayerSection(onLogout: () -> Unit) {
             scope.launch { PlayerPrefs.setTunneling(context, it) }
         }
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(28.dp))
+        Text("Abonnement", fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+        expDate?.let { seconds ->
+            val daysLeft = ((seconds * 1000 - System.currentTimeMillis()) / (24L * 60 * 60 * 1000)).toInt()
+            val dateStr = remember(seconds) {
+                java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.FRANCE).format(java.util.Date(seconds * 1000))
+            }
+            val warn = daysLeft in 0..7
+            val expired = daysLeft < 0
+            Text(
+                if (expired) "Abonnement expiré depuis le $dateStr" else "Expire le $dateStr${if (warn) " (dans $daysLeft jour${if (daysLeft > 1) "s" else ""})" else ""}",
+                color = if (expired || warn) MaterialTheme.colorScheme.error else Color(0xFF9CA3AF),
+                fontWeight = if (expired || warn) FontWeight.Bold else FontWeight.Normal,
+            )
+        } ?: Text("Information non disponible.", color = Color.Gray, fontSize = MaterialTheme.typography.bodySmall.fontSize)
+
+        Spacer(Modifier.height(24.dp))
         Button(onClick = {
             scope.launch {
                 CredentialsStore.clear(context)

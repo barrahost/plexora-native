@@ -153,6 +153,23 @@ fun LiveFullscreenPlayer(
                             if (osdStage > 0) osdStage -= 1
                             true
                         }
+                        Key.DirectionUp, Key.DirectionDown -> {
+                            // Zapping direct sans ouvrir d'incrustation, comme TiviMate — la barre
+                            // rapide s'affiche brievement pour confirmer la nouvelle chaine.
+                            if (osdStage == 0 && channels.isNotEmpty()) {
+                                val idx = channels.indexOfFirst { it.streamId == channel.streamId }
+                                if (idx >= 0) {
+                                    val nextIdx = if (event.key == Key.DirectionUp) {
+                                        (idx - 1 + channels.size) % channels.size
+                                    } else {
+                                        (idx + 1) % channels.size
+                                    }
+                                    onChannelChange(channels[nextIdx])
+                                    showQuickBar = true
+                                }
+                            }
+                            true
+                        }
                         else -> false
                     }
                 } else {

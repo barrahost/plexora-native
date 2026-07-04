@@ -146,3 +146,14 @@ object XtreamClient {
     fun seriesStreamUrl(baseUrl: String, username: String, password: String, episodeId: String, ext: String): String =
         "${schemed(baseUrl)}/series/$username/$password/$episodeId.$ext"
 }
+
+// Xtream/Nginx renvoie souvent 451/403 pour un abonnement expire ou suspendu —
+// message brut peu comprehensible tel quel pour l'utilisateur.
+fun friendlyNetworkError(t: Throwable): String {
+    val msg = t.message ?: ""
+    return if (msg.contains("451") || msg.contains("403")) {
+        "Ton abonnement semble expiré ou suspendu. Vérifie ton renouvellement, puis reessaie."
+    } else {
+        "Impossible de joindre le serveur.\n($msg)"
+    }
+}

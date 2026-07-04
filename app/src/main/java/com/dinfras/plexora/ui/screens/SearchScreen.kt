@@ -2,6 +2,7 @@ package com.dinfras.plexora.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -103,16 +105,19 @@ fun SearchScreen(creds: XtreamCredentials) {
     }
     DisposableEffect(Unit) { onDispose { FullscreenHost.content.value = null } }
 
-    val results = remember(query, channels, movies, series) {
-        if (query.isBlank()) emptyList()
-        else {
-            val q = query.trim()
-            (channels.filter { it.name.contains(q, ignoreCase = true) }.map { SearchResult.Channel(it) } +
-                movies.filter { it.name.contains(q, ignoreCase = true) }.map { SearchResult.Movie(it) } +
-                series.filter { it.name.contains(q, ignoreCase = true) }.map { SearchResult.Series(it) })
-                .take(60)
-        }
+    // Resultats groupes par type (chaines/films/series), plutot qu'une seule
+    // liste plate, pour s'y retrouver plus vite quand la recherche remonte
+    // des correspondances dans plusieurs categories a la fois.
+    val channelResults = remember(query, channels) {
+        if (query.isBlank()) emptyList() else channels.filter { it.name.contains(query.trim(), ignoreCase = true) }.map { SearchResult.Channel(it) }.take(20)
     }
+    val movieResults = remember(query, movies) {
+        if (query.isBlank()) emptyList() else movies.filter { it.name.contains(query.trim(), ignoreCase = true) }.map { SearchResult.Movie(it) }.take(20)
+    }
+    val seriesResults = remember(query, series) {
+        if (query.isBlank()) emptyList() else series.filter { it.name.contains(query.trim(), ignoreCase = true) }.map { SearchResult.Series(it) }.take(20)
+    }
+    val hasResults = channelResults.isNotEmpty() || movieResults.isNotEmpty() || seriesResults.isNotEmpty()
 
     Column(Modifier.fillMaxSize().padding(32.dp)) {
         Text("Rechercher", fontWeight = FontWeight.Bold, fontSize = MaterialTheme.typography.headlineSmall.fontSize)
@@ -134,38 +139,64 @@ fun SearchScreen(creds: XtreamCredentials) {
             Text("Commence à taper pour chercher parmi les chaînes, films et séries.", color = Color.Gray)
             return@Column
         }
-        if (results.isEmpty()) {
+        if (!hasResults) {
             Text("Aucun résultat pour « $query ».", color = Color.Gray)
             return@Column
         }
 
         LazyColumn(Modifier.fillMaxSize()) {
-            items(results) { r ->
-                Row(
-                    Modifier.fillMaxWidth()
-                        .clickable {
-                            when (r) {
-                                is SearchResult.Channel -> openChannel = r.channel
-                                is SearchResult.Movie -> openMovie = r.movie
-                                is SearchResult.Series -> openSeries = r.series
-                            }
-                        }
-                        .padding(vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val (icon, label) = when (r) {
-                        is SearchResult.Channel -> Icons.Filled.Tv to "TV"
-                        is SearchResult.Movie -> Icons.Filled.Movie to "Film"
-                        is SearchResult.Series -> Icons.Filled.Theaters to "Série"
-                    }
-                    Icon(icon, contentDescription = label, tint = Color.Gray, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(r.name, fontWeight = FontWeight.SemiBold)
-                        Text(label, color = Color.Gray, fontSize = MaterialTheme.typography.bodySmall.fontSize)
-                    }
+            if (channelResults.isNotEmpty()) {
+                item { SearchSectionHeader("Chaînes TV") }
+                items(channelResults) { r ->
+                    SearchResultRow(r) { openChannel = (r as SearchResult.Channel).channel }
+                }
+            }
+            if (movieResults.isNotEmpty()) {
+                item { SearchSectionHeader("Films") }
+                items(movieResults) { r ->
+                    SearchResultRow(r) { openMovie = (r as SearchResult.Movie).movie }
+                }
+            }
+            if (seriesResults.isNotEmpty()) {
+                item { SearchSectionHeader("Séries") }
+                items(seriesResults) { r ->
+                    SearchResultRow(r) { openSeries = (r as SearchResult.Series).series }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SearchSectionHeader(label: String) {
+    Text(
+        label,
+        color = Color.Gray,
+        fontWeight = FontWeight.Bold,
+        fontSize = MaterialTheme.typography.labelLarge.fontSize,
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun SearchResultRow(r: SearchResult, onClick: () -> Unit) {
+    var isFocused by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth()
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
+            .clickable(onClick = onClick)
+            .background(if (isFocused) Color.White else Color.Transparent)
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val icon = when (r) {
+            is SearchResult.Channel -> Icons.Filled.Tv
+            is SearchResult.Movie -> Icons.Filled.Movie
+            is SearchResult.Series -> Icons.Filled.Theaters
+        }
+        Icon(icon, contentDescription = null, tint = if (isFocused) Color.Black else Color.Gray, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(r.name, fontWeight = FontWeight.SemiBold, color = if (isFocused) Color.Black else Color.White)
     }
 }
