@@ -12,6 +12,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -26,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -37,7 +39,6 @@ import com.dinfras.plexora.data.XtreamCredentials
 import com.dinfras.plexora.ui.screens.*
 import com.dinfras.plexora.ui.theme.PlexoraBackground
 import com.dinfras.plexora.ui.theme.PlexoraTheme
-import com.dinfras.plexora.ui.theme.PlexoraViolet
 import kotlinx.coroutines.delay
 
 private enum class Tab(val label: String, val icon: ImageVector) {
@@ -171,21 +172,39 @@ private fun Sidebar(active: Tab, expanded: Boolean, onSelect: (Tab) -> Unit) {
             }
         }
         Spacer(Modifier.height(24.dp))
+        // Deux etats de selection distincts, comme sur TiviMate : le gris
+        // indique la section actuellement ouverte, le blanc indique la
+        // position du curseur D-pad — il faut appuyer sur OK pour que le
+        // curseur devienne la section active.
+        var focusedTab by remember { mutableStateOf<Tab?>(null) }
         Tab.entries.forEach { t ->
             val isActive = t == active
+            val isFocused = t == focusedTab
+            val bg = when {
+                isFocused -> Color.White
+                isActive -> Color(0xFF374151)
+                else -> Color.Transparent
+            }
+            val fg = when {
+                isFocused -> Color.Black
+                isActive -> Color.White
+                else -> Color(0xFF9CA3AF)
+            }
             Row(
                 Modifier.fillMaxWidth()
+                    .onFocusChanged { focusedTab = if (it.isFocused) t else if (focusedTab == t) null else focusedTab }
+                    .focusable()
                     .clickable { onSelect(t) }
-                    .background(if (isActive) PlexoraViolet.copy(alpha = 0.25f) else Color.Transparent, RoundedCornerShape(8.dp))
+                    .background(bg, RoundedCornerShape(8.dp))
                     .padding(horizontal = if (expanded) 16.dp else 0.dp, vertical = 12.dp),
                 horizontalArrangement = if (expanded) Arrangement.Start else Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (!expanded) Spacer(Modifier.weight(1f))
-                Icon(t.icon, contentDescription = t.label, tint = if (isActive) PlexoraViolet else Color(0xFF9CA3AF))
+                Icon(t.icon, contentDescription = t.label, tint = fg)
                 if (expanded) {
                     Spacer(Modifier.width(12.dp))
-                    Text(t.label, color = if (isActive) Color.White else Color(0xFF9CA3AF), fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal)
+                    Text(t.label, color = fg, fontWeight = if (isActive || isFocused) FontWeight.Bold else FontWeight.Normal)
                 }
                 if (!expanded) Spacer(Modifier.weight(1f))
             }
