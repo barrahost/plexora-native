@@ -109,8 +109,8 @@ fun RadioScreen(creds: XtreamCredentials) {
                 var isFocused by remember(s) { mutableStateOf(false) }
                 Row(
                     modifier = Modifier.fillMaxWidth()
-                        .focusable()
                         .onFocusChanged { isFocused = it.isFocused }
+                        .focusable()
                         .clickable { active = s }
                         .background(if (isFocused) Color.White else if (isActive) PlexoraOrange.copy(alpha = 0.25f) else Color.Transparent)
                         .padding(12.dp, 8.dp),

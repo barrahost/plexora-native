@@ -152,9 +152,9 @@ fun SeriesScreen(creds: XtreamCredentials) {
                 items(filtered) { s ->
                     Column(
                         Modifier
-                            .clickable { selected = s }
+                            .onFocusChanged { if (it.isFocused) focused = s }
                             .focusable()
-                            .onFocusChanged { if (it.isFocused) focused = s },
+                            .clickable { selected = s },
                     ) {
                         Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1F2937))) {
                             if (!s.cover.isNullOrBlank()) {

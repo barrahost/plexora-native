@@ -161,9 +161,9 @@ fun MoviesScreen(creds: XtreamCredentials) {
                 items(filtered) { m ->
                     Column(
                         Modifier
-                            .clickable { selected = m }
+                            .onFocusChanged { if (it.isFocused) focused = m }
                             .focusable()
-                            .onFocusChanged { if (it.isFocused) focused = m },
+                            .clickable { selected = m },
                     ) {
                         Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1F2937))) {
                             val poster = m.streamIcon ?: m.cover
@@ -200,8 +200,8 @@ fun CategoryEntryRow(
     Text(
         label,
         modifier = modifier.fillMaxWidth()
-            .focusable()
             .onFocusChanged { if (it.isFocused) onFocus() }
+            .focusable()
             .clickable(onClick = onClick)
             .background(bg)
             .padding(16.dp, 12.dp),

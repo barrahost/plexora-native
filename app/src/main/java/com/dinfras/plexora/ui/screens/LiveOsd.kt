@@ -332,8 +332,8 @@ private fun CategoryRow(label: String, active: Boolean, onClick: () -> Unit) {
     Text(
         label,
         modifier = Modifier.fillMaxWidth()
-            .focusable()
             .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
             .clickable(onClick = onClick)
             .background(if (isFocused) Color.White else if (active) PlexoraOrange.copy(alpha = 0.25f) else Color.Transparent)
             .padding(16.dp, 12.dp),
@@ -369,8 +369,8 @@ fun ChannelRow(
     val fg = if (isFocused) Color.Black else Color.White
     Row(
         Modifier.fillMaxWidth()
-            .focusable()
             .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
             .clickable(onClick = onClick)
             .background(bg)
             .padding(10.dp),
