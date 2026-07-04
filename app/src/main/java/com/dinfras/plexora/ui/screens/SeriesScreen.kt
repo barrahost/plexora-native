@@ -21,6 +21,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -71,30 +76,48 @@ fun SeriesScreen(creds: XtreamCredentials) {
 
     var focused by remember { mutableStateOf(filtered.firstOrNull()) }
 
+    // Meme comportement que Films : la colonne categories se replie des
+    // qu'on en valide une, fleche GAUCHE (ou Retour) la refait reapparaitre.
+    var categoriesCollapsed by remember { mutableStateOf(false) }
+    var categoryFocus by remember { mutableStateOf<String?>(null) }
+
+    BackHandler(enabled = categoriesCollapsed) { categoriesCollapsed = false }
+
     Row(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827))) {
-            item {
-                Text(
-                    "Toutes les séries",
-                    modifier = Modifier.fillMaxWidth().clickable { selectedCat = null }
-                        .background(if (selectedCat == null) PlexoraOrange.copy(alpha = 0.2f) else Color.Transparent)
-                        .padding(16.dp, 12.dp),
-                    fontWeight = if (selectedCat == null) FontWeight.Bold else FontWeight.Normal,
-                )
-            }
-            items(categories) { cat ->
-                val active = selectedCat == cat.categoryId
-                Text(
-                    cat.categoryName,
-                    modifier = Modifier.fillMaxWidth().clickable { selectedCat = cat.categoryId }
-                        .background(if (active) PlexoraOrange.copy(alpha = 0.2f) else Color.Transparent)
-                        .padding(16.dp, 12.dp),
-                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                )
+        if (!categoriesCollapsed) {
+            LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827))) {
+                item {
+                    CategoryEntryRow(
+                        label = "Toutes les séries",
+                        active = selectedCat == null,
+                        focused = categoryFocus == "__all__",
+                        onFocus = { categoryFocus = "__all__" },
+                        onClick = { selectedCat = null; categoriesCollapsed = true },
+                    )
+                }
+                items(categories) { cat ->
+                    CategoryEntryRow(
+                        label = cat.categoryName,
+                        active = selectedCat == cat.categoryId,
+                        focused = categoryFocus == cat.categoryId,
+                        onFocus = { categoryFocus = cat.categoryId },
+                        onClick = { selectedCat = cat.categoryId; categoriesCollapsed = true },
+                    )
+                }
             }
         }
 
-        Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF030712))) {
+        Column(
+            Modifier.weight(1f).fillMaxHeight().background(Color(0xFF030712))
+                .onKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft && categoriesCollapsed) {
+                        categoriesCollapsed = false
+                        true
+                    } else {
+                        false
+                    }
+                },
+        ) {
             val fs = focused
             if (fs != null) {
                 MediaPreviewInfo(
