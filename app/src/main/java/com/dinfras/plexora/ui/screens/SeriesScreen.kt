@@ -6,7 +6,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -192,7 +191,7 @@ fun SeriesDetail(series: XtreamSeries, creds: XtreamCredentials, service: Xtream
     var saved by remember { mutableStateOf(false) }
 
     LaunchedEffect(series) {
-        saved = MyListStore.isSaved(context, series.seriesId)
+        saved = MyListStore.isSavedSeries(context, series.seriesId)
         runCatching {
             val result = service.getSeriesInfo(creds.username, creds.password, series.seriesId)
             info = result.info
@@ -298,7 +297,7 @@ fun SeriesDetail(series: XtreamSeries, creds: XtreamCredentials, service: Xtream
                 }
             }
             ActionButton(icon = if (saved) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder, label = "Ajouter à ma liste") {
-                scope.launch { saved = MyListStore.toggle(context, series.seriesId) }
+                scope.launch { saved = MyListStore.toggleSeries(context, series.seriesId) }
             }
         }
 
@@ -309,65 +308,58 @@ fun SeriesDetail(series: XtreamSeries, creds: XtreamCredentials, service: Xtream
             return@Column
         }
 
-        // Saisons + episodes en bande horizontale
-        val seasons = episodesBySeason.keys.toList()
-        if (seasons.size > 1) {
-            Row(Modifier.padding(horizontal = 24.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                seasons.forEach { season ->
-                    val active = selectedSeason == season
-                    Text(
-                        "Saison $season",
-                        modifier = Modifier.clip(RoundedCornerShape(6.dp))
-                            .background(if (active) PlexoraOrange.copy(alpha = 0.25f) else Color(0xFF1F2937))
-                            .clickable { selectedSeason = season }
-                            .padding(14.dp, 8.dp),
-                        color = Color.White,
-                        fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                    )
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-        } else {
-            Text("Saison ${selectedSeason ?: ""}", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 24.dp))
-            Spacer(Modifier.height(12.dp))
-        }
-
-        val episodes = episodesBySeason[selectedSeason] ?: emptyList()
-        val listState = rememberLazyListState()
-        if (episodes.isNotEmpty()) {
-            Box {
-                LazyRow(
-                    state = listState,
-                    contentPadding = PaddingValues(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(episodes) { e ->
-                        Column(Modifier.width(220.dp).clickable { activeEp = e }) {
-                            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(Color(0xFF1F2937))) {
-                                val thumb = e.info?.movieImage ?: series.cover
-                                if (!thumb.isNullOrBlank()) {
-                                    AsyncImage(model = thumb, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                                }
-                            }
-                            Spacer(Modifier.height(4.dp))
-                            Text("E${e.episodeNum} — ${e.title ?: "Épisode ${e.episodeNum}"}", color = Color.White, maxLines = 1, fontSize = 13.sp)
-                        }
-                    }
-                }
-                Text(
-                    "${(listState.firstVisibleItemIndex + 1).coerceAtMost(episodes.size)} / ${episodes.size}",
-                    color = Color.Gray,
-                    fontSize = 13.sp,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(end = 24.dp),
-                )
-            }
+        // Toutes les saisons empilees, chacune avec sa bande d'episodes —
+        // comme le repere fourni (pas besoin de choisir une saison au prealable).
+        episodesBySeason.keys.toList().forEach { season ->
+            val episodes = episodesBySeason[season] ?: emptyList()
+            if (episodes.isEmpty()) return@forEach
+            SeasonRow(
+                season = season,
+                episodes = episodes,
+                fallbackCover = series.cover,
+                onSelectEpisode = { activeEp = it },
+            )
+            Spacer(Modifier.height(20.dp))
         }
         Spacer(Modifier.height(24.dp))
     }
 }
 
 @Composable
-private fun ActionButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, primary: Boolean = false, onClick: () -> Unit) {
+private fun SeasonRow(season: String, episodes: List<SeriesEpisode>, fallbackCover: String?, onSelectEpisode: (SeriesEpisode) -> Unit) {
+    val listState = rememberLazyListState()
+    Text("Saison $season", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 24.dp))
+    Spacer(Modifier.height(8.dp))
+    Box {
+        LazyRow(
+            state = listState,
+            contentPadding = PaddingValues(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(episodes) { e ->
+                Column(Modifier.width(220.dp).clickable { onSelectEpisode(e) }) {
+                    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(Color(0xFF1F2937))) {
+                        val thumb = e.info?.movieImage ?: fallbackCover
+                        if (!thumb.isNullOrBlank()) {
+                            AsyncImage(model = thumb, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text("E${e.episodeNum} — ${e.title ?: "Épisode ${e.episodeNum}"}", color = Color.White, maxLines = 1, fontSize = 13.sp)
+                }
+            }
+        }
+        Text(
+            "${(listState.firstVisibleItemIndex + 1).coerceAtMost(episodes.size)} / ${episodes.size}",
+            color = Color.Gray,
+            fontSize = 13.sp,
+            modifier = Modifier.align(Alignment.TopEnd).padding(end = 24.dp),
+        )
+    }
+}
+
+@Composable
+fun ActionButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, primary: Boolean = false, onClick: () -> Unit) {
     Row(
         Modifier
             .clip(RoundedCornerShape(8.dp))

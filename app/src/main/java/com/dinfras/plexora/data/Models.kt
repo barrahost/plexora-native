@@ -123,4 +123,6 @@ data class VodInfo(
     val director: String? = null,
     val genre: String? = null,
     @Json(name = "release_date") val releaseDate: String? = null,
+    @Json(name = "backdrop_path") val backdropPath: List<String>? = null,
+    @Json(name = "youtube_trailer") val youtubeTrailer: String? = null,
 )

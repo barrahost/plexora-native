@@ -1,5 +1,7 @@
 package com.dinfras.plexora.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -10,9 +12,15 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
@@ -27,6 +36,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,6 +45,7 @@ import com.dinfras.plexora.data.*
 import com.dinfras.plexora.player.LiveVideoPlayer
 import com.dinfras.plexora.ui.theme.PlexoraOrange
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @androidx.media3.common.util.UnstableApi
 @Composable
@@ -191,19 +202,22 @@ fun CategoryEntryRow(label: String, active: Boolean, focused: Boolean, onFocus: 
     )
 }
 
+// Fiche film en plein largeur (banniere + synopsis + actions), meme
+// disposition que la fiche serie — remplace l'ancienne affiche fixe + apercu.
 @androidx.media3.common.util.UnstableApi
 @Composable
 fun MovieDetail(creds: XtreamCredentials, service: XtreamService, movie: XtreamMovie, onBack: () -> Unit) {
-    var playing by remember { mutableStateOf(false) }
-    var fullscreen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var info by remember { mutableStateOf<VodInfo?>(null) }
+    var fullscreen by remember { mutableStateOf(false) }
+    var saved by remember { mutableStateOf(false) }
 
-    // Bouton Retour : plein ecran -> lecture -> fiche film -> grille
     BackHandler(enabled = fullscreen) { fullscreen = false }
-    BackHandler(enabled = !fullscreen && playing) { playing = false }
-    BackHandler(enabled = !fullscreen && !playing) { onBack() }
+    BackHandler(enabled = !fullscreen) { onBack() }
 
     LaunchedEffect(movie) {
+        saved = MyListStore.isSavedMovie(context, movie.streamId)
         info = runCatching { service.getVodInfo(creds.username, creds.password, movie.streamId).info }.getOrNull()
     }
 
@@ -211,63 +225,77 @@ fun MovieDetail(creds: XtreamCredentials, service: XtreamService, movie: XtreamM
         XtreamClient.vodStreamUrl(creds.url, creds.username, creds.password, movie.streamId, movie.containerExtension ?: "mp4")
     }
 
-    Box(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxSize().background(Color(0xFF030712))) {
-            // Affiche fixe a gauche
-            Box(Modifier.width(260.dp).fillMaxHeight().background(Color(0xFF111827))) {
-                val poster = movie.streamIcon ?: movie.cover
-                if (!poster.isNullOrBlank()) {
-                    AsyncImage(model = poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                }
-                TextButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
-                    Text("< Retour", color = Color.White)
-                }
-            }
-
-            // Apercu (haut) + infos (bas) a droite
-            Column(Modifier.weight(1f).fillMaxHeight()) {
-                Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
-                    if (playing) {
-                        LiveVideoPlayer(streamUrl, Modifier.fillMaxSize().clickable { fullscreen = true })
-                        IconButton(onClick = { fullscreen = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
-                            Icon(Icons.Filled.Fullscreen, contentDescription = "Plein écran", tint = Color.White)
-                        }
-                    } else {
-                        Box(Modifier.fillMaxSize().clickable { playing = true }, contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(48.dp))
-                                Spacer(Modifier.height(4.dp))
-                                Text("Lecture", color = Color.White)
-                            }
-                        }
-                    }
-                }
-                Box(Modifier.weight(1f).fillMaxWidth().background(Color(0xFF030712)).padding(16.dp)) {
-                    LazyColumn {
-                        item { Text(movie.name, fontWeight = FontWeight.Bold, fontSize = 18.sp) }
-                        val i = info
-                        if (i != null) {
-                            i.releaseDate?.let { d -> item { Spacer(Modifier.height(8.dp)); LabelValue("Date de sortie", d) } }
-                            i.genre?.let { g -> item { Spacer(Modifier.height(4.dp)); LabelValue("Genre", g) } }
-                            i.plot?.let { p -> item { Spacer(Modifier.height(8.dp)); LabelValue("Description", p) } }
-                            i.director?.let { d -> item { Spacer(Modifier.height(4.dp)); LabelValue("Réalisateur", d) } }
-                            i.cast?.let { c -> item { Spacer(Modifier.height(4.dp)); LabelValue("Casting", c) } }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (fullscreen) {
-            FullscreenPlayer(streamUrl = streamUrl, title = movie.name, onClose = { fullscreen = false })
-        }
+    if (fullscreen) {
+        FullscreenPlayer(streamUrl = streamUrl, title = movie.name, onClose = { fullscreen = false })
+        return
     }
-}
 
-@Composable
-private fun LabelValue(label: String, value: String) {
-    Column {
-        Text(label, color = PlexoraOrange, fontWeight = FontWeight.SemiBold, fontSize = MaterialTheme.typography.bodySmall.fontSize)
-        Text(value, color = Color.LightGray, fontSize = MaterialTheme.typography.bodySmall.fontSize)
+    Column(Modifier.fillMaxSize().background(Color(0xFF030712)).verticalScroll(rememberScrollState())) {
+        Box(Modifier.fillMaxWidth().height(320.dp)) {
+            val backdrop = info?.backdropPath?.firstOrNull() ?: movie.streamIcon ?: movie.cover
+            if (!backdrop.isNullOrBlank()) {
+                AsyncImage(model = backdrop, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFF030712), Color(0xFF030712).copy(alpha = 0.4f), Color.Transparent))))
+            Column(Modifier.align(Alignment.BottomStart).padding(24.dp).widthIn(max = 720.dp)) {
+                TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) { Text("< Retour", color = Color.White) }
+                Spacer(Modifier.height(4.dp))
+                val year = info?.releaseDate?.take(4)
+                Text(
+                    if (!year.isNullOrBlank()) "${movie.name} ($year)" else movie.name,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 26.sp,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val rating = movie.rating5based
+                    if (rating != null && rating > 0) {
+                        Text(
+                            String.format("%.1f", rating),
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            modifier = Modifier.background(PlexoraOrange, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                    }
+                    val meta = listOfNotNull(year, info?.genre).joinToString(" · ")
+                    if (meta.isNotBlank()) Text(meta, color = Color.Gray, fontSize = 13.sp)
+                }
+                info?.cast?.let { if (it.isNotBlank()) { Spacer(Modifier.height(6.dp)); Text("Acteurs : $it", color = Color(0xFF9CA3AF), fontSize = 13.sp, maxLines = 1) } }
+                info?.director?.let { if (it.isNotBlank()) { Text("Réalisateur : $it", color = Color(0xFF9CA3AF), fontSize = 13.sp, maxLines = 1) } }
+                info?.plot?.let { if (it.isNotBlank()) { Spacer(Modifier.height(8.dp)); Text(it, color = Color.LightGray, fontSize = 13.sp, maxLines = 5) } }
+            }
+        }
+
+        Row(Modifier.fillMaxWidth().padding(24.dp, 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ActionButton(icon = Icons.Filled.PlayArrow, label = "Regarder", primary = true) { fullscreen = true }
+            ActionButton(icon = Icons.Filled.OpenInNew, label = "Ouvrir dans un lecteur externe") {
+                runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(Uri.parse(streamUrl), "video/*")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        },
+                    )
+                }
+            }
+            val trailer = info?.youtubeTrailer
+            if (!trailer.isNullOrBlank()) {
+                ActionButton(icon = Icons.Filled.Movie, label = "Bande annonce") {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$trailer"))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }
+                }
+            }
+            ActionButton(icon = if (saved) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder, label = "Ajouter à ma liste") {
+                scope.launch { saved = MyListStore.toggleMovie(context, movie.streamId) }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }
