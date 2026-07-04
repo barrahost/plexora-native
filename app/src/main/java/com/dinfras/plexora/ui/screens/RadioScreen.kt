@@ -1,5 +1,6 @@
 package com.dinfras.plexora.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,37 +11,50 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dinfras.plexora.data.*
 import com.dinfras.plexora.player.LiveVideoPlayer
 import com.dinfras.plexora.ui.theme.PlexoraOrange
 
+// Meme logique que TV/Films/Series : categories repliables (blanc = curseur
+// D-pad, orange = categorie active), fleche GAUCHE ou Retour les rouvre.
 @androidx.media3.common.util.UnstableApi
 @Composable
 fun RadioScreen(creds: XtreamCredentials) {
     val service = remember(creds) { XtreamClient.create(creds.url) }
 
+    var categories by remember { mutableStateOf<List<XtreamCategory>>(emptyList()) }
     var stations by remember { mutableStateOf<List<XtreamChannel>>(emptyList()) }
+    var selectedCat by remember { mutableStateOf<String?>(null) }
     var active by remember { mutableStateOf<XtreamChannel?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(creds) {
         runCatching {
-            val cats = service.getLiveCategories(creds.username, creds.password)
-            val radioCatIds = cats.filter { it.categoryName.contains("radio", ignoreCase = true) }.map { it.categoryId }.toSet()
+            val allCats = service.getLiveCategories(creds.username, creds.password)
+            val radioCatIds = allCats.filter { it.categoryName.contains("radio", ignoreCase = true) }.map { it.categoryId }.toSet()
+            categories = allCats.filter { it.categoryId in radioCatIds }
             val all = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
             stations = all.filter { it.categoryId in radioCatIds }
         }.onFailure { error = it.message ?: it.toString() }
         loading = false
     }
 
+    val filtered = remember(stations, selectedCat) {
+        if (selectedCat == null) stations else stations.filter { it.categoryId == selectedCat }
+    }
+
     if (loading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
-
     if (error != null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Erreur de chargement :\n$error", color = Color.Red) }
         return
@@ -52,19 +66,59 @@ fun RadioScreen(creds: XtreamCredentials) {
         return
     }
 
+    // La colonne categories se replie des qu'on en valide une, comme sur
+    // Films/Series. Inutile si une seule categorie radio existe.
+    var categoriesCollapsed by remember { mutableStateOf(categories.size <= 1) }
+    var categoryFocus by remember { mutableStateOf<String?>(null) }
+
+    BackHandler(enabled = categoriesCollapsed && categories.size > 1) { categoriesCollapsed = false }
+
     Row(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.width(300.dp).fillMaxHeight().background(Color(0xFF111827))) {
-            items(stations) { s ->
+        if (categories.size > 1 && !categoriesCollapsed) {
+            LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827))) {
+                item {
+                    CategoryEntryRow(
+                        label = "Toutes les stations",
+                        active = selectedCat == null,
+                        focused = categoryFocus == "__all__",
+                        onFocus = { categoryFocus = "__all__" },
+                        onClick = { selectedCat = null; categoriesCollapsed = true },
+                    )
+                }
+                items(categories) { cat ->
+                    CategoryEntryRow(
+                        label = cat.categoryName,
+                        active = selectedCat == cat.categoryId,
+                        focused = categoryFocus == cat.categoryId,
+                        onFocus = { categoryFocus = cat.categoryId },
+                        onClick = { selectedCat = cat.categoryId; categoriesCollapsed = true },
+                    )
+                }
+            }
+        }
+
+        LazyColumn(
+            Modifier.width(300.dp).fillMaxHeight().background(Color(0xFF111827).copy(alpha = 0.92f))
+                .onKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft && categoriesCollapsed && categories.size > 1) {
+                        categoriesCollapsed = false
+                        true
+                    } else {
+                        false
+                    }
+                },
+        ) {
+            items(filtered) { s ->
                 val isActive = active?.streamId == s.streamId
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable { active = s }
-                        .background(if (isActive) PlexoraOrange.copy(alpha = 0.2f) else Color.Transparent)
+                        .background(if (isActive) Color.White else Color.Transparent)
                         .padding(12.dp, 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     ChannelLogo(s.name, s.streamIcon, size = 32.dp)
                     Spacer(Modifier.width(10.dp))
-                    Text(s.name, fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal)
+                    Text(s.name, color = if (isActive) Color.Black else Color.White, fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal)
                 }
             }
         }

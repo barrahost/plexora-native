@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Theaters
@@ -46,6 +47,7 @@ private enum class Tab(val label: String, val icon: ImageVector) {
     LIVE("TV", Icons.Filled.Tv),
     MOVIES("Films", Icons.Filled.Movie),
     SERIES("Séries", Icons.Filled.Theaters),
+    RADIO("Radio", Icons.Filled.Radio),
     SETTINGS("Paramètres", Icons.Filled.Settings),
 }
 
@@ -136,6 +138,7 @@ private fun AppContent() {
                     Tab.LIVE -> LiveTvScreen(current)
                     Tab.MOVIES -> MoviesScreen(current)
                     Tab.SERIES -> SeriesScreen(current)
+                    Tab.RADIO -> RadioScreen(current)
                     Tab.SETTINGS -> SettingsScreen(
                         activeCreds = current,
                         onLogout = { creds = null; tab = Tab.LIVE },
