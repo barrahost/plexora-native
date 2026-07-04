@@ -38,6 +38,7 @@ fun SearchScreen(creds: XtreamCredentials) {
     var series by remember { mutableStateOf<List<XtreamSeries>>(emptyList()) }
     var categories by remember { mutableStateOf<List<XtreamCategory>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
 
     var openMovie by remember { mutableStateOf<XtreamMovie?>(null) }
@@ -54,7 +55,7 @@ fun SearchScreen(creds: XtreamCredentials) {
         val vod = CatalogCache.getMovies() ?: CatalogCache.loadMoviesFromDisk(context)
         val ser = CatalogCache.getSeries() ?: CatalogCache.loadSeriesFromDisk(context)
 
-        var haveAll = live != null && vod != null && ser != null
+        val haveAll = live != null && vod != null && ser != null
         if (live != null) { categories = live.categories; channels = live.channels }
         if (vod != null) movies = vod.movies
         if (ser != null) series = ser.series
@@ -72,6 +73,10 @@ fun SearchScreen(creds: XtreamCredentials) {
                 if (live == null) CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
                 if (vod == null) CatalogCache.setMovies(context, CatalogCache.MovieData(service.getVodCategories(creds.username, creds.password), newMovies))
                 if (ser == null) CatalogCache.setSeries(context, CatalogCache.SeriesData(service.getSeriesCategories(creds.username, creds.password), newSeries))
+            }.onFailure {
+                // N'affiche l'erreur que si on n'a vraiment rien a chercher —
+                // avec un cache partiel, la recherche reste utilisable.
+                if (channels.isEmpty() && movies.isEmpty() && series.isEmpty()) error = friendlyNetworkError(it)
             }
         }
         loading = false
@@ -133,6 +138,10 @@ fun SearchScreen(creds: XtreamCredentials) {
 
         if (loading) {
             CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+            return@Column
+        }
+        error?.let {
+            Text("Erreur de chargement :\n$it", color = MaterialTheme.colorScheme.error)
             return@Column
         }
         if (query.isBlank()) {

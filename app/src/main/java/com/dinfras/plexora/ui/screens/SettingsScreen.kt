@@ -27,6 +27,13 @@ import kotlinx.coroutines.launch
 
 private data class BufferOption(val mode: BufferMode, val label: String, val desc: String)
 
+private class InvalidPlaylistCredentialsException : Exception("Identifiants incorrects.")
+
+// La date d'expiration change rarement : un seul appel serveur par session
+// suffit, pas un a chaque ouverture de la section Lecteur.
+private var cachedExpDate: Long? = null
+private var expDateFetched = false
+
 private val BUFFER_OPTIONS = listOf(
     BufferOption(BufferMode.NONE, "Aucun", "Latence minimale, très sensible aux coupures. Pour réseau très stable uniquement."),
     BufferOption(BufferMode.SMALL, "Faible", "Réaction rapide, plus sensible aux coupures sur réseau instable."),
@@ -265,10 +272,14 @@ private fun PlayerSection(activeCreds: XtreamCredentials, onLogout: () -> Unit) 
         audioDecoder = PlayerPrefs.getAudioDecoder(context)
         videoDecoder = PlayerPrefs.getVideoDecoder(context)
         tunneling = PlayerPrefs.getTunneling(context)
-        runCatching {
-            val info = XtreamClient.create(activeCreds.url).getAccountInfo(activeCreds.username, activeCreds.password)
-            expDate = info.userInfo?.expDate?.toLongOrNull()
+        if (!expDateFetched) {
+            runCatching {
+                val info = XtreamClient.create(activeCreds.url).getAccountInfo(activeCreds.username, activeCreds.password)
+                cachedExpDate = info.userInfo?.expDate?.toLongOrNull()
+                expDateFetched = true
+            }
         }
+        expDate = cachedExpDate
     }
 
     Column(Modifier.fillMaxSize().widthIn(max = 520.dp).verticalScroll(rememberScrollState())) {
@@ -448,12 +459,16 @@ private fun AddPlaylistForm(onCancel: () -> Unit, onSaved: () -> Unit) {
                         runCatching {
                             val creds = XtreamCredentials(url, username, password)
                             val info = XtreamClient.create(creds.url).getAccountInfo(creds.username, creds.password)
-                            if (info.userInfo?.auth != 1) error("Identifiants incorrects.")
+                            if (info.userInfo?.auth != 1) throw InvalidPlaylistCredentialsException()
                             val finalLabel = label.ifBlank { "$username — ${url.substringAfter("//")}" }
                             PlaylistsStore.upsert(context, finalLabel, creds)
                             onSaved()
                         }.onFailure {
-                            error = "Impossible de joindre le serveur.\n(${it.message})"
+                            error = if (it is InvalidPlaylistCredentialsException) {
+                                "Identifiants incorrects. Vérifie l'URL, le nom d'utilisateur et le mot de passe."
+                            } else {
+                                "Impossible de joindre le serveur.\n(${it.message})"
+                            }
                             saving = false
                         }
                     }

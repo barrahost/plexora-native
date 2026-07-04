@@ -83,6 +83,13 @@ fun LiveFullscreenPlayer(
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
+    // Quand une incrustation se ferme (barre rapide, panneaux, guide), le focus
+    // etait sur un de ses elements desormais disparus — on le ramene sur le
+    // conteneur video pour que la telecommande reste operationnelle.
+    LaunchedEffect(showQuickBar, osdStage, showGrid) {
+        if (!showQuickBar && osdStage == 0 && !showGrid) focusRequester.requestFocus()
+    }
+
     LaunchedEffect(osdStage, channel) {
         if (osdStage > 0) {
             delay(8000)
@@ -141,13 +148,17 @@ fun LiveFullscreenPlayer(
                         }
                         else -> false
                     }
-                } else if (event.type == KeyEventType.KeyDown && !showGrid && !showQuickBar) {
+                } else if (event.type == KeyEventType.KeyDown && !showGrid) {
                     when (event.key) {
+                        // Gauche/droite restent reserves au defilement des tuiles
+                        // quand la barre rapide est ouverte.
                         Key.DirectionLeft -> {
+                            if (showQuickBar) return@onKeyEvent false
                             osdStage = (osdStage + 1).coerceAtMost(3)
                             true
                         }
                         Key.DirectionRight -> {
+                            if (showQuickBar) return@onKeyEvent false
                             // Symetrique de GAUCHE : on referme les incrustations un niveau a la fois
                             // (categories seules -> categories+chaines -> chaines+programme -> video nue).
                             if (osdStage > 0) osdStage -= 1
@@ -155,16 +166,21 @@ fun LiveFullscreenPlayer(
                         }
                         Key.DirectionUp, Key.DirectionDown -> {
                             // Zapping direct sans ouvrir d'incrustation, comme TiviMate — la barre
-                            // rapide s'affiche brievement pour confirmer la nouvelle chaine.
-                            if (osdStage == 0 && channels.isNotEmpty()) {
-                                val idx = channels.indexOfFirst { it.streamId == channel.streamId }
-                                if (idx >= 0) {
+                            // rapide s'affiche brievement pour confirmer la nouvelle chaine, et
+                            // les zaps suivants restent possibles pendant qu'elle est visible.
+                            // Le zap reste dans la categorie selectionnee (repli sur la liste
+                            // complete si la chaine courante n'en fait pas partie).
+                            if (osdStage == 0) {
+                                val catList = if (selectedCat == null) channels else channels.filter { it.categoryId == selectedCat }
+                                val zapList = if (catList.any { it.streamId == channel.streamId }) catList else channels
+                                val idx = zapList.indexOfFirst { it.streamId == channel.streamId }
+                                if (idx >= 0 && zapList.size > 1) {
                                     val nextIdx = if (event.key == Key.DirectionUp) {
-                                        (idx - 1 + channels.size) % channels.size
+                                        (idx - 1 + zapList.size) % zapList.size
                                     } else {
-                                        (idx + 1) % channels.size
+                                        (idx + 1) % zapList.size
                                     }
-                                    onChannelChange(channels[nextIdx])
+                                    onChannelChange(zapList[nextIdx])
                                     showQuickBar = true
                                 }
                             }
@@ -295,11 +311,16 @@ private fun QuickBar(
                     trackColor = Color(0xFF374151),
                 )
             }
+            // Focus place d'office sur la premiere tuile : sans ca, le conteneur
+            // plein ecran garde le focus et la touche OK referme la barre au
+            // lieu de valider une tuile.
+            val firstTileFocusRequester = remember { FocusRequester() }
+            LaunchedEffect(Unit) { firstTileFocusRequester.requestFocus() }
             Row(
                 Modifier.fillMaxWidth().padding(16.dp).horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                QuickBarTile(Icons.Filled.Grid3x3, "Guide TV", onClick = onOpenGuide)
+                QuickBarTile(Icons.Filled.Grid3x3, "Guide TV", onClick = onOpenGuide, modifier = Modifier.focusRequester(firstTileFocusRequester))
                 QuickBarTile(Icons.Filled.History, "Historique", active = showingHistory, onClick = { showingHistory = !showingHistory })
                 strip.forEach { ch ->
                     QuickBarChannelTile(ch, active = ch.streamId == activeChannel.streamId) { onSelectChannel(ch) }
@@ -310,11 +331,11 @@ private fun QuickBar(
 }
 
 @Composable
-private fun QuickBarTile(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, active: Boolean = false, onClick: () -> Unit) {
+private fun QuickBarTile(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, active: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
     var isFocused by remember { mutableStateOf(false) }
     val fg = if (isFocused) Color.Black else Color.White
     Column(
-        Modifier
+        modifier
             .width(90.dp)
             .clip(RoundedCornerShape(8.dp))
             .onFocusChanged { isFocused = it.isFocused }

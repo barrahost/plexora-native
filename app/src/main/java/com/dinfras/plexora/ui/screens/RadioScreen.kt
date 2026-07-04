@@ -124,7 +124,9 @@ fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -
 
         LazyColumn(Modifier.width(300.dp).fillMaxHeight().background(Color(0xFF111827).copy(alpha = AppUiState.overlayAlpha.floatValue))) {
             items(filtered) { s ->
-                val isActive = active?.streamId == s.streamId
+                // La station reste surlignee meme en pause (active passe alors a
+                // null mais pausedStation garde la reference).
+                val isActive = (active ?: pausedStation)?.streamId == s.streamId
                 var isFocused by remember(s) { mutableStateOf(false) }
                 Row(
                     modifier = Modifier.fillMaxWidth()
