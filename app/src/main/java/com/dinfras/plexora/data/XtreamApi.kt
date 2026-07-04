@@ -2,6 +2,7 @@ package com.dinfras.plexora.data
 
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
@@ -98,9 +99,15 @@ suspend fun XtreamService.getShortEpgThrottled(username: String, password: Strin
 // Client HTTP natif : contrairement au WebView, aucune contrainte CORS ici —
 // c'est exactement ce qui nous manquait dans la version Capacitor.
 object XtreamClient {
-    private val http = OkHttpClient.Builder()
+    // Client HTTP partage avec Coil (affiches) pour n'utiliser qu'un seul pool
+    // de connexions vers ce serveur — sinon Retrofit, Coil et ExoPlayer
+    // ouvrent chacun leur propre pool et se disputent le nombre limite de
+    // connexions simultanees que le serveur accepte par hote, ralentissant
+    // tout le monde (affiches lentes, flux qui peine a demarrer).
+    val http: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        .dispatcher(Dispatcher().apply { maxRequestsPerHost = 12; maxRequests = 24 })
         .build()
 
     fun create(baseUrl: String): XtreamService {

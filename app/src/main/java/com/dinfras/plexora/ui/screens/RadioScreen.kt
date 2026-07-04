@@ -135,7 +135,7 @@ fun RadioScreen(creds: XtreamCredentials) {
                     Spacer(Modifier.height(12.dp))
                     val url = remember(station) { XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, station.streamId) }
                     // Lecture audio : le player video sert de moteur de lecture, la surface reste noire
-                    Box(Modifier.size(1.dp)) { LiveVideoPlayer(url, Modifier.size(1.dp)) }
+                    Box(Modifier.size(1.dp)) { LiveVideoPlayer(url, Modifier.size(1.dp), showLoadingIndicator = false) }
                 }
             }
         }

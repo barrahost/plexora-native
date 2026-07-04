@@ -1,11 +1,18 @@
 package com.dinfras.plexora.player
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -28,13 +35,18 @@ private const val PLAYER_USER_AGENT =
 
 @UnstableApi
 @Composable
-fun LiveVideoPlayer(streamUrl: String, modifier: Modifier = Modifier) {
+fun LiveVideoPlayer(streamUrl: String, modifier: Modifier = Modifier, showLoadingIndicator: Boolean = true) {
     val context = LocalContext.current
     val bufferMode by produceState(initialValue = BufferMode.MEDIUM) {
         value = BufferPrefs.get(context)
     }
+    // Aucun retour visuel pendant la mise en tampon jusqu'ici : l'ecran restait
+    // noir/fige sans rien indiquer, contrairement a TiviMate qui affiche un
+    // indicateur des le lancement de la lecture.
+    var isBuffering by remember { mutableStateOf(true) }
 
     val exoPlayer = remember(streamUrl, bufferMode) {
+        isBuffering = true
         val (minMs, maxMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs) = when (bufferMode) {
             BufferMode.NONE -> intArrayOf(1_000, 3_000, 500, 500)
             BufferMode.SMALL -> intArrayOf(5_000, 15_000, 2_000, 5_000)
@@ -54,6 +66,11 @@ fun LiveVideoPlayer(streamUrl: String, modifier: Modifier = Modifier) {
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .build()
             .apply {
+                addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        isBuffering = playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_IDLE
+                    }
+                })
                 setMediaItem(MediaItem.fromUri(streamUrl))
                 prepare()
                 playWhenReady = true
@@ -64,13 +81,22 @@ fun LiveVideoPlayer(streamUrl: String, modifier: Modifier = Modifier) {
         onDispose { exoPlayer.release() }
     }
 
-    AndroidView(
-        modifier = modifier.fillMaxSize(),
-        factory = {
-            PlayerView(it).apply {
-                player = exoPlayer
-                useController = false
-            }
-        },
-    )
+    Box(modifier) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = {
+                PlayerView(it).apply {
+                    player = exoPlayer
+                    useController = false
+                }
+            },
+        )
+        if (showLoadingIndicator && isBuffering) {
+            CircularProgressIndicator(
+                modifier = Modifier.align(Alignment.Center).size(40.dp),
+                color = Color.White,
+                strokeWidth = 3.dp,
+            )
+        }
+    }
 }
