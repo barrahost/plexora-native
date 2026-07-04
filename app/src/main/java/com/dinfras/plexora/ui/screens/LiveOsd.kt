@@ -94,7 +94,9 @@ fun LiveFullscreenPlayer(
                         true
                     }
                     Key.DirectionRight -> {
-                        if (osdStage > 0) osdStage = 0
+                        // Symetrique de GAUCHE : on referme les incrustations un niveau a la fois
+                        // (categories seules -> categories+chaines -> chaines+programme -> video nue).
+                        if (osdStage > 0) osdStage -= 1
                         true
                     }
                     else -> false
@@ -193,7 +195,8 @@ fun ChannelRow(
     }
 }
 
-// Niveau 1 (flèche gauche x1) : liste des chaines + fiche du programme en cours.
+// Niveau 1 (flèche gauche x1, ou flèche droite depuis le niveau 2) : liste
+// des chaines + programme complet de la chaine survolee, video visible a droite.
 @Composable
 private fun ChannelSwitcherPanel(
     creds: XtreamCredentials,
@@ -209,13 +212,63 @@ private fun ChannelSwitcherPanel(
     val now = epg.firstOrNull { it.nowPlaying == 1 } ?: epg.firstOrNull()
 
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.width(320.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = 0.92f))) {
-            itemsIndexed(channels) { idx, ch ->
-                ChannelRow(idx, ch, ch.streamId == activeChannel.streamId, creds, service) { onSelectChannel(ch) }
+        Row(Modifier.fillMaxHeight()) {
+            LazyColumn(Modifier.width(300.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = 0.92f))) {
+                itemsIndexed(channels) { idx, ch ->
+                    ChannelRow(idx, ch, ch.streamId == activeChannel.streamId, creds, service) { onSelectChannel(ch) }
+                }
             }
+            ChannelEpgList(
+                channel = activeChannel,
+                epg = epg,
+                modifier = Modifier.width(280.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = 0.85f)),
+            )
         }
         if (now != null) {
             ProgramInfoCard(now, Modifier.align(Alignment.TopEnd).padding(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun ChannelEpgList(channel: XtreamChannel, epg: List<EpgItem>, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(
+            channel.name,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            maxLines = 1,
+            modifier = Modifier.padding(16.dp, 12.dp),
+        )
+        if (epg.isEmpty()) {
+            Text(
+                "Guide non fourni pour cette chaîne.",
+                color = Color.Gray,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            return
+        }
+        LazyColumn {
+            items(epg) { item ->
+                val isNow = item.nowPlaying == 1
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    Text(
+                        formatTime(item.startTimestamp),
+                        color = if (isNow) PlexoraOrange else Color(0xFF9CA3AF),
+                        fontSize = 13.sp,
+                        modifier = Modifier.width(52.dp),
+                    )
+                    Text(
+                        decodeEpgText(item.title),
+                        color = if (isNow) PlexoraOrange else Color.White,
+                        fontWeight = if (isNow) FontWeight.Bold else FontWeight.Normal,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }
