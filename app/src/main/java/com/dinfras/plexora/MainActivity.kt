@@ -31,6 +31,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -150,6 +155,8 @@ private fun AppContent() {
                     tab = it
                     sidebarCollapsed = it != Tab.SEARCH && it != Tab.SETTINGS
                 },
+                onCollapse = { sidebarCollapsed = true },
+                onExpand = { sidebarCollapsed = false },
             )
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (tab) {
@@ -173,10 +180,24 @@ private fun AppContent() {
 // sections principales de l'appli, toujours visibles pour une navigation
 // rapide au D-pad.
 @Composable
-private fun Sidebar(active: Tab, expanded: Boolean, onSelect: (Tab) -> Unit) {
+private fun Sidebar(active: Tab, expanded: Boolean, onSelect: (Tab) -> Unit, onCollapse: () -> Unit, onExpand: () -> Unit) {
     val width by animateDpAsState(if (expanded) 200.dp else 72.dp, animationSpec = tween(200), label = "sidebarWidth")
     Column(
-        Modifier.width(width).fillMaxHeight().background(Color(0xFF0B0F19)).padding(vertical = 16.dp),
+        Modifier.width(width).fillMaxHeight().background(Color(0xFF0B0F19)).padding(vertical = 16.dp)
+            // Fleche DROITE : replie en icones (le focus continue normalement
+            // vers le contenu) ; fleche GAUCHE : redeplie completement — sans
+            // attendre une validation OK, comme demande.
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    when (event.key) {
+                        Key.DirectionRight -> { onCollapse(); false }
+                        Key.DirectionLeft -> { onExpand(); false }
+                        else -> false
+                    }
+                } else {
+                    false
+                }
+            },
     ) {
         if (expanded) {
             Image(
