@@ -164,6 +164,7 @@ private fun AppearanceSection() {
                 value = overlayAlpha,
                 onValueChange = {
                     overlayAlpha = it
+                    com.dinfras.plexora.ui.AppUiState.overlayAlpha.floatValue = it
                     scope.launch { UiPrefs.setOverlayAlpha(context, it) }
                 },
                 valueRange = 0f..1f,

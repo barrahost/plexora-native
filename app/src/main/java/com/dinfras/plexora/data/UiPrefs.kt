@@ -11,7 +11,7 @@ private val KEY_TEXT_SCALE = floatPreferencesKey("text_scale")
 // Opacite des elements affiches par-dessus la video (barre du lecteur plein
 // ecran, boutons plein ecran) — 1 = opaque, 0 = totalement transparent.
 object UiPrefs {
-    const val DEFAULT_OVERLAY_ALPHA = 0.85f
+    const val DEFAULT_OVERLAY_ALPHA = 0.5f
     const val DEFAULT_TEXT_SCALE = 1f
 
     suspend fun getOverlayAlpha(context: Context): Float =

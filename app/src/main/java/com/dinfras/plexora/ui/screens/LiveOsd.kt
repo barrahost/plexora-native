@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dinfras.plexora.data.*
 import com.dinfras.plexora.player.LiveVideoPlayer
+import com.dinfras.plexora.ui.AppUiState
 import com.dinfras.plexora.ui.theme.PlexoraOrange
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -237,7 +238,7 @@ private fun QuickBar(
                     .padding(24.dp)
                     .widthIn(max = 420.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF111827).copy(alpha = 0.88f))
+                    .background(Color(0xFF111827).copy(alpha = AppUiState.overlayAlpha.floatValue))
                     .padding(14.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -265,7 +266,7 @@ private fun QuickBar(
             Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)))),
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = AppUiState.overlayAlpha.floatValue)))),
         ) {
             if (now != null) {
                 val total = (now.stopTimestamp - now.startTimestamp).coerceAtLeast(1)
@@ -415,7 +416,7 @@ private fun ChannelSwitcherPanel(
 
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxHeight()) {
-            LazyColumn(Modifier.width(300.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = 0.92f))) {
+            LazyColumn(Modifier.width(300.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = AppUiState.overlayAlpha.floatValue))) {
                 itemsIndexed(channels) { idx, ch ->
                     ChannelRow(idx, ch, ch.streamId == activeChannel.streamId, creds, service) { onSelectChannel(ch) }
                 }
@@ -423,7 +424,7 @@ private fun ChannelSwitcherPanel(
             ChannelEpgList(
                 channel = activeChannel,
                 epg = epg,
-                modifier = Modifier.width(280.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = 0.85f)),
+                modifier = Modifier.width(280.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = AppUiState.overlayAlpha.floatValue)),
             )
         }
         if (now != null) {
@@ -481,7 +482,7 @@ fun ProgramInfoCard(item: EpgItem, modifier: Modifier = Modifier) {
         modifier
             .widthIn(max = 340.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF111827).copy(alpha = 0.9f))
+            .background(Color(0xFF111827).copy(alpha = AppUiState.overlayAlpha.floatValue))
             .padding(16.dp),
     ) {
         Text(decodeEpgText(item.title), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
@@ -517,11 +518,11 @@ private fun CategoryChannelPanel(
         if (selectedCat == null) channels else channels.filter { it.categoryId == selectedCat }
     }
     Row(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827).copy(alpha = 0.92f))) {
+        LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827).copy(alpha = AppUiState.overlayAlpha.floatValue))) {
             item { CategoryRow("Toutes les chaînes", selectedCat == null) { onSelectCat(null) } }
             items(categories) { cat -> CategoryRow(cat.categoryName, selectedCat == cat.categoryId) { onSelectCat(cat.categoryId) } }
         }
-        LazyColumn(Modifier.width(300.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = 0.92f))) {
+        LazyColumn(Modifier.width(300.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = AppUiState.overlayAlpha.floatValue))) {
             itemsIndexed(filtered) { idx, ch ->
                 ChannelRow(idx, ch, ch.streamId == activeChannel.streamId, creds, service) { onSelectChannel(ch) }
             }
@@ -536,7 +537,7 @@ private fun CategoryOnlyPanel(
     selectedCat: String?,
     onSelectCat: (String?) -> Unit,
 ) {
-    LazyColumn(Modifier.width(320.dp).fillMaxHeight().background(Color(0xFF111827).copy(alpha = 0.92f))) {
+    LazyColumn(Modifier.width(320.dp).fillMaxHeight().background(Color(0xFF111827).copy(alpha = AppUiState.overlayAlpha.floatValue))) {
         item { CategoryRow("Toutes les chaînes", selectedCat == null) { onSelectCat(null) } }
         items(categories) { cat -> CategoryRow(cat.categoryName, selectedCat == cat.categoryId) { onSelectCat(cat.categoryId) } }
     }
@@ -564,7 +565,7 @@ private fun EpgGridOverlay(
     val now = focusedEpg.firstOrNull { it.nowPlaying == 1 } ?: focusedEpg.firstOrNull()
     val windowStart = remember { (now?.startTimestamp ?: (System.currentTimeMillis() / 1000)) }
 
-    Column(Modifier.fillMaxSize().background(Color(0xFF030712).copy(alpha = 0.97f))) {
+    Column(Modifier.fillMaxSize().background(Color(0xFF030712).copy(alpha = AppUiState.overlayAlpha.floatValue))) {
         Row(Modifier.fillMaxWidth().padding(16.dp)) {
             Box(
                 Modifier.width(280.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(Color.Black),

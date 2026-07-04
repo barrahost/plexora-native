@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dinfras.plexora.data.*
 import com.dinfras.plexora.player.LiveVideoPlayer
+import com.dinfras.plexora.ui.AppUiState
 import com.dinfras.plexora.ui.theme.PlexoraOrange
 
 // Meme logique que TV/Films/Series : categories repliables (blanc = curseur
@@ -102,7 +103,7 @@ fun RadioScreen(creds: XtreamCredentials) {
             }
         }
 
-        LazyColumn(Modifier.width(300.dp).fillMaxHeight().background(Color(0xFF111827).copy(alpha = 0.92f))) {
+        LazyColumn(Modifier.width(300.dp).fillMaxHeight().background(Color(0xFF111827).copy(alpha = AppUiState.overlayAlpha.floatValue))) {
             items(filtered) { s ->
                 val isActive = active?.streamId == s.streamId
                 var isFocused by remember(s) { mutableStateOf(false) }

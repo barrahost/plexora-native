@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
                     var showSplash by remember { mutableStateOf(true) }
                     LaunchedEffect(Unit) {
                         AppUiState.textScale.floatValue = UiPrefs.getTextScale(this@MainActivity)
+                        AppUiState.overlayAlpha.floatValue = UiPrefs.getOverlayAlpha(this@MainActivity)
                         delay(1000)
                         showSplash = false
                     }

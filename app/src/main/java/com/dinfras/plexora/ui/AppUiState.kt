@@ -8,4 +8,9 @@ import com.dinfras.plexora.data.UiPrefs
 // changement de taille de texte s'applique immediatement, sans redemarrage.
 object AppUiState {
     val textScale = mutableFloatStateOf(UiPrefs.DEFAULT_TEXT_SCALE)
+
+    // Meme principe pour l'opacite des panneaux qui survolent la video (liste
+    // des chaines, categories, guide, barre rapide) — sans etat partage, le
+    // reglage n'aurait pris effet qu'apres avoir quitte/rouvert chaque ecran.
+    val overlayAlpha = mutableFloatStateOf(UiPrefs.DEFAULT_OVERLAY_ALPHA)
 }
