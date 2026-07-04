@@ -434,7 +434,7 @@ private fun ChannelSwitcherPanel(
 }
 
 @Composable
-private fun ChannelEpgList(channel: XtreamChannel, epg: List<EpgItem>, modifier: Modifier = Modifier) {
+fun ChannelEpgList(channel: XtreamChannel, epg: List<EpgItem>, modifier: Modifier = Modifier) {
     Column(modifier) {
         Text(
             channel.name,

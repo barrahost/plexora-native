@@ -121,9 +121,15 @@ fun LiveTvScreen(creds: XtreamCredentials) {
                 }
             }
 
-            // Colonne 3 : petit apercu (haut, avec fiche programme flottante) + grille de programmes multi-chaines (bas)
+            // Colonne 3 : petit apercu (haut, avec fiche programme flottante) + programme complet de la chaine (bas)
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 val channel = activeChannel
+                var epg by remember(channel) { mutableStateOf<List<EpgItem>>(emptyList()) }
+                LaunchedEffect(channel) {
+                    epg = if (channel == null) emptyList()
+                    else runCatching { service.getShortEpgThrottled(creds.username, creds.password, channel.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
+                }
+
                 Box(Modifier.height(200.dp).fillMaxWidth().background(Color.Black)) {
                     if (channel == null) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -138,10 +144,6 @@ fun LiveTvScreen(creds: XtreamCredentials) {
                             Icon(Icons.Filled.Fullscreen, contentDescription = "Plein écran", tint = Color.White)
                         }
 
-                        var epg by remember(channel) { mutableStateOf<List<EpgItem>>(emptyList()) }
-                        LaunchedEffect(channel) {
-                            epg = runCatching { service.getShortEpgThrottled(creds.username, creds.password, channel.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
-                        }
                         val now = epg.firstOrNull { it.nowPlaying == 1 } ?: epg.firstOrNull()
                         if (now != null) {
                             ProgramInfoCard(now, Modifier.align(Alignment.TopEnd).padding(12.dp))
@@ -149,16 +151,9 @@ fun LiveTvScreen(creds: XtreamCredentials) {
                     }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth().background(Color(0xFF030712))) {
-                    val windowStart = remember { System.currentTimeMillis() / 1000 }
-                    EpgGridList(
-                        channels = filteredChannels,
-                        activeChannel = channel,
-                        windowStart = windowStart,
-                        creds = creds,
-                        service = service,
-                        onFocus = {},
-                        onSelect = { activeChannel = it },
-                    )
+                    if (channel != null) {
+                        ChannelEpgList(channel = channel, epg = epg, modifier = Modifier.fillMaxSize())
+                    }
                 }
             }
         }
