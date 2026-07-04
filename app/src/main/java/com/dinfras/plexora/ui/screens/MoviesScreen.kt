@@ -54,18 +54,23 @@ import kotlinx.coroutines.launch
 fun MoviesScreen(creds: XtreamCredentials) {
     val service = remember(creds) { XtreamClient.create(creds.url) }
 
-    var categories by remember { mutableStateOf<List<XtreamCategory>>(emptyList()) }
-    var movies by remember { mutableStateOf<List<XtreamMovie>>(emptyList()) }
+    val cached = remember { CatalogCache.getMovies() }
+    var categories by remember { mutableStateOf(cached?.categories ?: emptyList()) }
+    var movies by remember { mutableStateOf(cached?.movies ?: emptyList()) }
     var selectedCat by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<XtreamMovie?>(null) }
-    var loading by remember { mutableStateOf(true) }
+    // Deja en cache : affichage instantane, pas d'ecran de chargement.
+    var loading by remember { mutableStateOf(cached == null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(creds) {
         runCatching {
-            categories = service.getVodCategories(creds.username, creds.password)
-            movies = service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
-        }.onFailure { error = it.message ?: it.toString() }
+            val newCategories = service.getVodCategories(creds.username, creds.password)
+            val newMovies = service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
+            categories = newCategories
+            movies = newMovies
+            CatalogCache.setMovies(CatalogCache.MovieData(newCategories, newMovies))
+        }.onFailure { if (cached == null) error = it.message ?: it.toString() }
         loading = false
     }
 

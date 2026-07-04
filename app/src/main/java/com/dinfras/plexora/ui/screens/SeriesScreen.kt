@@ -56,18 +56,23 @@ import kotlinx.coroutines.launch
 fun SeriesScreen(creds: XtreamCredentials) {
     val service = remember(creds) { XtreamClient.create(creds.url) }
 
-    var categories by remember { mutableStateOf<List<XtreamCategory>>(emptyList()) }
-    var seriesList by remember { mutableStateOf<List<XtreamSeries>>(emptyList()) }
+    val cached = remember { CatalogCache.getSeries() }
+    var categories by remember { mutableStateOf(cached?.categories ?: emptyList()) }
+    var seriesList by remember { mutableStateOf(cached?.series ?: emptyList()) }
     var selectedCat by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<XtreamSeries?>(null) }
-    var loading by remember { mutableStateOf(true) }
+    // Deja en cache : affichage instantane, pas d'ecran de chargement.
+    var loading by remember { mutableStateOf(cached == null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(creds) {
         runCatching {
-            categories = service.getSeriesCategories(creds.username, creds.password)
-            seriesList = service.getSeriesList(creds.username, creds.password).filter { it.seriesId > 0 }
-        }.onFailure { error = it.message ?: it.toString() }
+            val newCategories = service.getSeriesCategories(creds.username, creds.password)
+            val newSeries = service.getSeriesList(creds.username, creds.password).filter { it.seriesId > 0 }
+            categories = newCategories
+            seriesList = newSeries
+            CatalogCache.setSeries(CatalogCache.SeriesData(newCategories, newSeries))
+        }.onFailure { if (cached == null) error = it.message ?: it.toString() }
         loading = false
     }
 

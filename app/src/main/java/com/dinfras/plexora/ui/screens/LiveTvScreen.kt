@@ -29,25 +29,31 @@ import com.dinfras.plexora.ui.theme.PlexoraOrange
 fun LiveTvScreen(creds: XtreamCredentials) {
     val service = remember(creds) { XtreamClient.create(creds.url) }
 
-    var categories by remember { mutableStateOf<List<XtreamCategory>>(emptyList()) }
-    var channels by remember { mutableStateOf<List<XtreamChannel>>(emptyList()) }
+    val cached = remember { CatalogCache.getLive() }
+    var categories by remember { mutableStateOf(cached?.categories ?: emptyList()) }
+    var channels by remember { mutableStateOf(cached?.channels ?: emptyList()) }
     var selectedCat by remember { mutableStateOf<String?>(null) }
     var activeChannel by remember { mutableStateOf<XtreamChannel?>(null) }
     var fullscreen by remember { mutableStateOf(false) }
-    var loading by remember { mutableStateOf(true) }
+    // Deja en cache : on affiche instantanement, pas d'ecran de chargement —
+    // comme TiviMate. Sinon, chargement classique la toute premiere fois.
+    var loading by remember { mutableStateOf(cached == null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(creds) {
         runCatching {
-            categories = service.getLiveCategories(creds.username, creds.password)
-            channels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
+            val newCategories = service.getLiveCategories(creds.username, creds.password)
+            val newChannels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
+            categories = newCategories
+            channels = newChannels
+            CatalogCache.setLive(CatalogCache.LiveData(newCategories, newChannels))
             if (PlayerPrefs.getResumeLastChannel(context)) {
                 val lastId = PlayerPrefs.getLastChannelId(context)
-                if (lastId != null) activeChannel = channels.firstOrNull { it.streamId == lastId }
+                if (lastId != null) activeChannel = newChannels.firstOrNull { it.streamId == lastId }
             }
-        }.onFailure { error = it.message ?: it.toString() }
+        }.onFailure { if (cached == null) error = it.message ?: it.toString() }
         loading = false
     }
 

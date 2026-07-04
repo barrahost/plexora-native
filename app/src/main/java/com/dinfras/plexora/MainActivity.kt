@@ -168,7 +168,7 @@ private fun AppContent() {
                     Tab.SETTINGS -> SettingsScreen(
                         activeCreds = current,
                         onLogout = { creds = null; tab = Tab.LIVE },
-                        onSwitchPlaylist = { creds = it },
+                        onSwitchPlaylist = { com.dinfras.plexora.data.CatalogCache.clear(); creds = it },
                     )
                 }
             }
