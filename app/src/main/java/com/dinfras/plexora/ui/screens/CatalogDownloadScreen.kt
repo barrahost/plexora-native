@@ -37,8 +37,12 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
     var movieCount by remember { mutableStateOf<Int?>(null) }
     var seriesCount by remember { mutableStateOf<Int?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Si rien du tout n'a pu etre recupere, on reste sur cet ecran avec un
+    // bouton Reessayer au lieu d'entrer dans une appli vide.
+    var blocked by remember { mutableStateOf(false) }
+    var attempt by remember { mutableStateOf(0) }
 
-    LaunchedEffect(creds) {
+    LaunchedEffect(creds, attempt) {
         runCatching {
             val liveCats = service.getLiveCategories(creds.username, creds.password)
             val liveChannels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
@@ -61,6 +65,12 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
             seriesCount = seriesList.size
             CatalogCache.setSeries(context, CatalogCache.SeriesData(seriesCats, seriesList))
         }.onFailure { if (error == null) error = friendlyNetworkError(it) }
+
+        val nothingFetched = CatalogCache.getLive() == null && CatalogCache.getMovies() == null && CatalogCache.getSeries() == null
+        if (nothingFetched && error != null) {
+            blocked = true
+            return@LaunchedEffect
+        }
 
         // Le guide TV complet (XMLTV) peut etre volumineux — se telecharge
         // sur un scope independant de cet ecran (voir LocalEpgStore), pour
@@ -92,7 +102,23 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
 
             error?.let {
                 Spacer(Modifier.height(24.dp))
-                Text("Certaines listes n'ont pas pu être récupérées :\n$it", color = MaterialTheme.colorScheme.error, fontSize = MaterialTheme.typography.bodySmall.fontSize)
+                Text(
+                    if (blocked) "Impossible de récupérer ton abonnement :\n$it" else "Certaines listes n'ont pas pu être récupérées :\n$it",
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
+                )
+            }
+            if (blocked) {
+                Spacer(Modifier.height(16.dp))
+                androidx.compose.material3.Button(onClick = {
+                    error = null
+                    blocked = false
+                    liveCount = null
+                    radioCount = null
+                    movieCount = null
+                    seriesCount = null
+                    attempt++
+                }) { Text("Réessayer") }
             }
         }
     }

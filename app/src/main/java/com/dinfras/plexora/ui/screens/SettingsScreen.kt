@@ -30,9 +30,11 @@ private data class BufferOption(val mode: BufferMode, val label: String, val des
 private class InvalidPlaylistCredentialsException : Exception("Identifiants incorrects.")
 
 // La date d'expiration change rarement : un seul appel serveur par session
-// suffit, pas un a chaque ouverture de la section Lecteur.
+// suffit, pas un a chaque ouverture de la section Lecteur. Le cache est
+// invalide par compte (cle URL+utilisateur), sinon un changement de playlist
+// afficherait la date de l'ancien abonnement.
 private var cachedExpDate: Long? = null
-private var expDateFetched = false
+private var expDateCacheKey: String? = null
 
 private val BUFFER_OPTIONS = listOf(
     BufferOption(BufferMode.NONE, "Aucun", "Latence minimale, très sensible aux coupures. Pour réseau très stable uniquement."),
@@ -272,11 +274,13 @@ private fun PlayerSection(activeCreds: XtreamCredentials, onLogout: () -> Unit) 
         audioDecoder = PlayerPrefs.getAudioDecoder(context)
         videoDecoder = PlayerPrefs.getVideoDecoder(context)
         tunneling = PlayerPrefs.getTunneling(context)
-        if (!expDateFetched) {
+        val accountKey = "${activeCreds.url}|${activeCreds.username}"
+        if (expDateCacheKey != accountKey) {
+            cachedExpDate = null
             runCatching {
                 val info = XtreamClient.create(activeCreds.url).getAccountInfo(activeCreds.username, activeCreds.password)
                 cachedExpDate = info.userInfo?.expDate?.toLongOrNull()
-                expDateFetched = true
+                expDateCacheKey = accountKey
             }
         }
         expDate = cachedExpDate
