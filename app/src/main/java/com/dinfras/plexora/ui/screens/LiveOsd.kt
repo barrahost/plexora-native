@@ -11,6 +11,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Grid3x3
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
@@ -30,10 +34,15 @@ import androidx.compose.ui.unit.sp
 import com.dinfras.plexora.data.*
 import com.dinfras.plexora.player.LiveVideoPlayer
 import com.dinfras.plexora.ui.theme.PlexoraOrange
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private const val LONG_PRESS_MS = 500L
 
 private fun formatTime(epochSeconds: Long): String =
     if (epochSeconds <= 0) "" else SimpleDateFormat("HH:mm", Locale.FRANCE).format(Date(epochSeconds * 1000))
@@ -58,8 +67,17 @@ fun LiveFullscreenPlayer(
 ) {
     var osdStage by remember { mutableStateOf(0) }
     var showGrid by remember { mutableStateOf(false) }
+    var showQuickBar by remember { mutableStateOf(false) }
     var selectedCat by remember { mutableStateOf<String?>(channel.categoryId) }
     val focusRequester = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
+    val history = remember { mutableStateListOf<XtreamChannel>() }
+
+    LaunchedEffect(channel) {
+        history.removeAll { it.streamId == channel.streamId }
+        history.add(0, channel)
+        if (history.size > 20) history.removeRange(20, history.size)
+    }
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
@@ -69,16 +87,26 @@ fun LiveFullscreenPlayer(
             osdStage = 0
         }
     }
+    LaunchedEffect(showQuickBar, channel) {
+        if (showQuickBar) {
+            delay(8000)
+            showQuickBar = false
+        }
+    }
 
     val url = remember(channel) {
         XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, channel.streamId)
     }
 
     // Retour : ferme le guide (et quitte le plein ecran), sinon masque
-    // l'incrustation, sinon ouvre le guide TV.
+    // l'incrustation ou la barre rapide, sinon ouvre le guide TV.
     BackHandler(enabled = showGrid) { showGrid = false; onExit() }
     BackHandler(enabled = !showGrid && osdStage > 0) { osdStage = 0 }
-    BackHandler(enabled = !showGrid && osdStage == 0) { showGrid = true }
+    BackHandler(enabled = !showGrid && osdStage == 0 && showQuickBar) { showQuickBar = false }
+    BackHandler(enabled = !showGrid && osdStage == 0 && !showQuickBar) { showGrid = true }
+
+    var okDownJob by remember { mutableStateOf<Job?>(null) }
+    var okWasLongPress by remember { mutableStateOf(false) }
 
     Box(
         Modifier
@@ -87,19 +115,46 @@ fun LiveFullscreenPlayer(
             .focusRequester(focusRequester)
             .focusable()
             .onKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown || showGrid) return@onKeyEvent false
-                when (event.key) {
-                    Key.DirectionLeft -> {
-                        osdStage = (osdStage + 1).coerceAtMost(3)
-                        true
+                if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
+                    when (event.type) {
+                        KeyEventType.KeyDown -> {
+                            if (okDownJob == null && !showGrid && osdStage == 0) {
+                                okWasLongPress = false
+                                okDownJob = scope.launch {
+                                    delay(LONG_PRESS_MS)
+                                    okWasLongPress = true
+                                    showQuickBar = false
+                                    osdStage = 1
+                                }
+                            }
+                            true
+                        }
+                        KeyEventType.KeyUp -> {
+                            okDownJob?.cancel()
+                            okDownJob = null
+                            if (!okWasLongPress && !showGrid && osdStage == 0) {
+                                showQuickBar = !showQuickBar
+                            }
+                            true
+                        }
+                        else -> false
                     }
-                    Key.DirectionRight -> {
-                        // Symetrique de GAUCHE : on referme les incrustations un niveau a la fois
-                        // (categories seules -> categories+chaines -> chaines+programme -> video nue).
-                        if (osdStage > 0) osdStage -= 1
-                        true
+                } else if (event.type == KeyEventType.KeyDown && !showGrid && !showQuickBar) {
+                    when (event.key) {
+                        Key.DirectionLeft -> {
+                            osdStage = (osdStage + 1).coerceAtMost(3)
+                            true
+                        }
+                        Key.DirectionRight -> {
+                            // Symetrique de GAUCHE : on referme les incrustations un niveau a la fois
+                            // (categories seules -> categories+chaines -> chaines+programme -> video nue).
+                            if (osdStage > 0) osdStage -= 1
+                            true
+                        }
+                        else -> false
                     }
-                    else -> false
+                } else {
+                    false
                 }
             },
     ) {
@@ -136,7 +191,136 @@ fun LiveFullscreenPlayer(
                 selectedCat = selectedCat,
                 onSelectCat = { selectedCat = it; osdStage = 2 },
             )
+            showQuickBar -> QuickBar(
+                creds = creds,
+                service = service,
+                channels = channels,
+                history = history,
+                activeChannel = channel,
+                onSelectChannel = { onChannelChange(it) },
+                onOpenGuide = { showQuickBar = false; showGrid = true },
+            )
         }
+    }
+}
+
+// Appui simple sur OK en plein ecran : barre d'infos (chaine, programme en
+// cours/suivant, progression) + acces rapide au Guide TV, a l'historique des
+// chaines visitees, et aux chaines elles-memes — comme le OSD par defaut de TiviMate.
+@Composable
+private fun QuickBar(
+    creds: XtreamCredentials,
+    service: XtreamService,
+    channels: List<XtreamChannel>,
+    history: List<XtreamChannel>,
+    activeChannel: XtreamChannel,
+    onSelectChannel: (XtreamChannel) -> Unit,
+    onOpenGuide: () -> Unit,
+) {
+    var epg by remember(activeChannel) { mutableStateOf<List<EpgItem>>(emptyList()) }
+    LaunchedEffect(activeChannel) {
+        epg = runCatching { service.getShortEpgThrottled(creds.username, creds.password, activeChannel.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
+    }
+    val nowIndex = epg.indexOfFirst { it.nowPlaying == 1 }
+    val now = epg.getOrNull(nowIndex) ?: epg.firstOrNull()
+    val next = if (nowIndex >= 0) epg.getOrNull(nowIndex + 1) else null
+
+    var showingHistory by remember { mutableStateOf(false) }
+    val strip = if (showingHistory) history else channels
+
+    Box(Modifier.fillMaxSize()) {
+        if (now != null) {
+            Column(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(24.dp)
+                    .widthIn(max = 420.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF111827).copy(alpha = 0.88f))
+                    .padding(14.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ChannelLogo(activeChannel.name, activeChannel.streamIcon, size = 28.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(decodeEpgText(now.title), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+                        Text(activeChannel.name, color = Color(0xFF9CA3AF), fontSize = 12.sp, maxLines = 1)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "${formatTime(now.startTimestamp)} – ${formatTime(now.stopTimestamp)}   ·   ${durationMinutes(now)} min",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                )
+                if (next != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text("Ensuite : ${decodeEpgText(next.title)}", color = Color(0xFF9CA3AF), fontSize = 12.sp, maxLines = 1)
+                }
+            }
+        }
+
+        Column(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)))),
+        ) {
+            if (now != null) {
+                val total = (now.stopTimestamp - now.startTimestamp).coerceAtLeast(1)
+                val elapsed = ((System.currentTimeMillis() / 1000) - now.startTimestamp).coerceIn(0, total)
+                LinearProgressIndicator(
+                    progress = { elapsed.toFloat() / total },
+                    modifier = Modifier.fillMaxWidth().height(3.dp),
+                    color = PlexoraOrange,
+                    trackColor = Color(0xFF374151),
+                )
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(16.dp).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                QuickBarTile(Icons.Filled.Grid3x3, "Guide TV", onClick = onOpenGuide)
+                QuickBarTile(Icons.Filled.History, "Historique", active = showingHistory, onClick = { showingHistory = !showingHistory })
+                strip.forEach { ch ->
+                    QuickBarChannelTile(ch, active = ch.streamId == activeChannel.streamId) { onSelectChannel(ch) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickBarTile(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, active: Boolean = false, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .width(90.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (active) PlexoraOrange.copy(alpha = 0.3f) else Color(0xFF1F2937))
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.height(4.dp))
+        Text(label, color = Color.White, fontSize = 11.sp, maxLines = 1)
+    }
+}
+
+@Composable
+private fun QuickBarChannelTile(channel: XtreamChannel, active: Boolean, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .width(90.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (active) PlexoraOrange.copy(alpha = 0.3f) else Color(0xFF1F2937))
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        ChannelLogo(channel.name, channel.streamIcon, size = 28.dp)
+        Spacer(Modifier.height(4.dp))
+        Text(channel.name, color = Color.White, fontSize = 11.sp, maxLines = 1)
     }
 }
 
