@@ -29,6 +29,7 @@ import com.dinfras.plexora.ui.theme.PlexoraOrange
 fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -> Unit = {}) {
     val service = remember(creds) { XtreamClient.create(creds.url) }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
     var categories by remember { mutableStateOf<List<XtreamCategory>>(emptyList()) }
     var stations by remember { mutableStateOf<List<XtreamChannel>>(emptyList()) }
     var selectedCat by remember { mutableStateOf<String?>(null) }
@@ -36,14 +37,25 @@ fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
+    // Les stations radio ne sont qu'un sous-ensemble des chaines live (memes
+    // categories/flux) : on reutilise le catalogue Live deja recupere (par
+    // CatalogDownloadScreen ou l'onglet TV) au lieu de refaire les memes
+    // appels reseau, qui declenchaient un blocage cote serveur (HTTP 451).
     LaunchedEffect(creds) {
-        runCatching {
-            val allCats = service.getLiveCategories(creds.username, creds.password)
-            val radioCatIds = allCats.filter { it.categoryName.contains("radio", ignoreCase = true) }.map { it.categoryId }.toSet()
-            categories = allCats.filter { it.categoryId in radioCatIds }
-            val all = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
-            stations = all.filter { it.categoryId in radioCatIds }
-        }.onFailure { error = it.message ?: it.toString() }
+        var live = CatalogCache.getLive() ?: CatalogCache.loadLiveFromDisk(context)
+        if (live == null) {
+            runCatching {
+                val newCategories = service.getLiveCategories(creds.username, creds.password)
+                val newChannels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
+                CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
+                live = CatalogCache.LiveData(newCategories, newChannels)
+            }.onFailure { error = it.message ?: it.toString() }
+        }
+        live?.let { data ->
+            val radioCatIds = data.categories.filter { it.categoryName.contains("radio", ignoreCase = true) }.map { it.categoryId }.toSet()
+            categories = data.categories.filter { it.categoryId in radioCatIds }
+            stations = data.channels.filter { it.categoryId in radioCatIds }
+        }
         loading = false
     }
 

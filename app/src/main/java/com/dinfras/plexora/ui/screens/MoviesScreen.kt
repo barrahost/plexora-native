@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.dinfras.plexora.data.*
 import com.dinfras.plexora.player.LiveVideoPlayer
+import com.dinfras.plexora.ui.FullscreenHost
 import com.dinfras.plexora.ui.theme.PlexoraOrange
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -77,13 +78,19 @@ fun MoviesScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                 haveData = true
             }
         }
-        runCatching {
-            val newCategories = service.getVodCategories(creds.username, creds.password)
-            val newMovies = service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
-            categories = newCategories
-            movies = newMovies
-            CatalogCache.setMovies(screenContext, CatalogCache.MovieData(newCategories, newMovies))
-        }.onFailure { if (!haveData) error = it.message ?: it.toString() }
+        // Le catalogue est deja recupere une fois en entier juste apres la
+        // connexion (CatalogDownloadScreen) : on ne relance pas l'appel
+        // reseau ici si on l'a deja, pour eviter un double appel qui
+        // declenchait un blocage cote serveur (HTTP 451).
+        if (!haveData) {
+            runCatching {
+                val newCategories = service.getVodCategories(creds.username, creds.password)
+                val newMovies = service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
+                categories = newCategories
+                movies = newMovies
+                CatalogCache.setMovies(screenContext, CatalogCache.MovieData(newCategories, newMovies))
+            }.onFailure { error = it.message ?: it.toString() }
+        }
         loading = false
     }
 
@@ -264,8 +271,19 @@ fun MovieDetail(creds: XtreamCredentials, service: XtreamService, movie: XtreamM
         XtreamClient.vodStreamUrl(creds.url, creds.username, creds.password, movie.streamId, movie.containerExtension ?: "mp4")
     }
 
+    // Publie dans FullscreenHost (rendu hors marge overscan, au niveau
+    // racine de l'activite) au lieu d'afficher le lecteur ici, pour que la
+    // lecture couvre reellement tout l'ecran de la TV.
+    LaunchedEffect(fullscreen) {
+        FullscreenHost.content.value = if (fullscreen) {
+            { FullscreenPlayer(streamUrl = streamUrl, title = movie.name, onClose = { fullscreen = false }) }
+        } else {
+            null
+        }
+    }
+    DisposableEffect(Unit) { onDispose { FullscreenHost.content.value = null } }
+
     if (fullscreen) {
-        FullscreenPlayer(streamUrl = streamUrl, title = movie.name, onClose = { fullscreen = false })
         return
     }
 

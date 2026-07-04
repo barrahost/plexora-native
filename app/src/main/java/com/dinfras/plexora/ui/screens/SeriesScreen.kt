@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.dinfras.plexora.data.*
 import com.dinfras.plexora.player.LiveVideoPlayer
+import com.dinfras.plexora.ui.FullscreenHost
 import com.dinfras.plexora.ui.theme.PlexoraOrange
 import kotlinx.coroutines.launch
 
@@ -79,13 +80,19 @@ fun SeriesScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                 haveData = true
             }
         }
-        runCatching {
-            val newCategories = service.getSeriesCategories(creds.username, creds.password)
-            val newSeries = service.getSeriesList(creds.username, creds.password).filter { it.seriesId > 0 }
-            categories = newCategories
-            seriesList = newSeries
-            CatalogCache.setSeries(screenContext, CatalogCache.SeriesData(newCategories, newSeries))
-        }.onFailure { if (!haveData) error = it.message ?: it.toString() }
+        // Le catalogue est deja recupere une fois en entier juste apres la
+        // connexion (CatalogDownloadScreen) : on ne relance pas l'appel
+        // reseau ici si on l'a deja, pour eviter un double appel qui
+        // declenchait un blocage cote serveur (HTTP 451).
+        if (!haveData) {
+            runCatching {
+                val newCategories = service.getSeriesCategories(creds.username, creds.password)
+                val newSeries = service.getSeriesList(creds.username, creds.password).filter { it.seriesId > 0 }
+                categories = newCategories
+                seriesList = newSeries
+                CatalogCache.setSeries(screenContext, CatalogCache.SeriesData(newCategories, newSeries))
+            }.onFailure { error = it.message ?: it.toString() }
+        }
         loading = false
     }
 
@@ -235,15 +242,21 @@ fun SeriesDetail(series: XtreamSeries, creds: XtreamCredentials, service: Xtream
     BackHandler(enabled = activeEp == null) { onBack() }
 
     val ep = activeEp
-    if (ep != null) {
-        val url = remember(ep) {
-            XtreamClient.seriesStreamUrl(creds.url, creds.username, creds.password, ep.id, ep.containerExtension ?: "mp4")
+    // Publie dans FullscreenHost (rendu hors marge overscan) au lieu
+    // d'afficher le lecteur ici, pour une lecture qui couvre reellement
+    // tout l'ecran de la TV.
+    LaunchedEffect(ep) {
+        if (ep != null) {
+            val url = XtreamClient.seriesStreamUrl(creds.url, creds.username, creds.password, ep.id, ep.containerExtension ?: "mp4")
+            val content: @Composable () -> Unit = { FullscreenPlayer(streamUrl = url, title = "${series.name} — Épisode ${ep.episodeNum}", onClose = { activeEp = null }) }
+            FullscreenHost.content.value = content
+        } else {
+            FullscreenHost.content.value = null
         }
-        FullscreenPlayer(
-            streamUrl = url,
-            title = "${series.name} — Épisode ${ep.episodeNum}",
-            onClose = { activeEp = null },
-        )
+    }
+    DisposableEffect(Unit) { onDispose { FullscreenHost.content.value = null } }
+
+    if (ep != null) {
         return
     }
 

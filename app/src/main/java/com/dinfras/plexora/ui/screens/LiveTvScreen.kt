@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.dinfras.plexora.data.*
 import com.dinfras.plexora.player.LiveVideoPlayer
 import com.dinfras.plexora.ui.AppUiState
+import com.dinfras.plexora.ui.FullscreenHost
 import com.dinfras.plexora.ui.theme.PlexoraOrange
 
 // Sequence identique a la version web : categories -> chaines -> apercu
@@ -52,17 +53,23 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                 haveData = true
             }
         }
-        runCatching {
-            val newCategories = service.getLiveCategories(creds.username, creds.password)
-            val newChannels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
-            categories = newCategories
-            channels = newChannels
-            CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
-            if (PlayerPrefs.getResumeLastChannel(context)) {
-                val lastId = PlayerPrefs.getLastChannelId(context)
-                if (lastId != null) activeChannel = newChannels.firstOrNull { it.streamId == lastId }
-            }
-        }.onFailure { if (!haveData) error = it.message ?: it.toString() }
+        // Le catalogue est deja recupere une fois en entier juste apres la
+        // connexion (CatalogDownloadScreen) : on ne relance pas l'appel
+        // reseau ici si on l'a deja, pour eviter un double appel qui
+        // declenchait un blocage cote serveur (HTTP 451).
+        if (!haveData) {
+            runCatching {
+                val newCategories = service.getLiveCategories(creds.username, creds.password)
+                val newChannels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
+                categories = newCategories
+                channels = newChannels
+                CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
+            }.onFailure { error = it.message ?: it.toString() }
+        }
+        if (PlayerPrefs.getResumeLastChannel(context)) {
+            val lastId = PlayerPrefs.getLastChannelId(context)
+            if (lastId != null) activeChannel = channels.firstOrNull { it.streamId == lastId }
+        }
         loading = false
     }
 
@@ -186,17 +193,28 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
             }
         }
 
+        // Publie dans FullscreenHost (rendu au niveau racine de l'activite,
+        // hors marge overscan) au lieu d'afficher le lecteur ici — sinon la
+        // lecture plein ecran restait confinee dans la zone de contenu
+        // reduite par cette marge, comme une fenetre au lieu de tout l'ecran.
         val fsChannel = activeChannel
-        if (fullscreen && fsChannel != null) {
-            LiveFullscreenPlayer(
-                creds = creds,
-                service = service,
-                categories = categories,
-                channels = channels,
-                channel = fsChannel,
-                onChannelChange = { activeChannel = it },
-                onExit = { fullscreen = false },
-            )
+        LaunchedEffect(fullscreen, fsChannel) {
+            FullscreenHost.content.value = if (fullscreen && fsChannel != null) {
+                {
+                    LiveFullscreenPlayer(
+                        creds = creds,
+                        service = service,
+                        categories = categories,
+                        channels = channels,
+                        channel = fsChannel,
+                        onChannelChange = { activeChannel = it },
+                        onExit = { fullscreen = false },
+                    )
+                }
+            } else {
+                null
+            }
         }
+        DisposableEffect(Unit) { onDispose { FullscreenHost.content.value = null } }
     }
 }

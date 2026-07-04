@@ -46,6 +46,7 @@ import androidx.media3.common.util.UnstableApi
 import com.dinfras.plexora.data.UiPrefs
 import com.dinfras.plexora.data.XtreamCredentials
 import com.dinfras.plexora.ui.AppUiState
+import com.dinfras.plexora.ui.FullscreenHost
 import com.dinfras.plexora.ui.screens.*
 import com.dinfras.plexora.ui.theme.PlexoraBackground
 import com.dinfras.plexora.ui.theme.PlexoraTheme
@@ -86,8 +87,14 @@ class MainActivity : ComponentActivity() {
                         if (showSplash) {
                             SplashScreen()
                         } else {
-                            Box(Modifier.fillMaxSize().padding(TvSafeArea)) {
-                                AppContent()
+                            Box(Modifier.fillMaxSize()) {
+                                Box(Modifier.fillMaxSize().padding(TvSafeArea)) {
+                                    AppContent()
+                                }
+                                // En dehors de la marge overscan : la lecture plein
+                                // ecran (chaine, film, episode) couvre reellement
+                                // tout l'ecran de la TV, pas une fenetre reduite.
+                                FullscreenHost.content.value?.invoke()
                             }
                         }
                     }
