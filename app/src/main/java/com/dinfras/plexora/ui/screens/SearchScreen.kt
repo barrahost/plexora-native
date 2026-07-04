@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dinfras.plexora.data.*
+import com.dinfras.plexora.ui.FullscreenHost
 
 private sealed interface SearchResult {
     val name: String
@@ -41,12 +42,35 @@ fun SearchScreen(creds: XtreamCredentials) {
     var openSeries by remember { mutableStateOf<XtreamSeries?>(null) }
     var openChannel by remember { mutableStateOf<XtreamChannel?>(null) }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Recherche : s'appuie sur le catalogue deja telecharge (memoire, sinon
+    // disque) au lieu de relancer un appel reseau complet a chaque visite —
+    // meme logique que les onglets TV/Films/Series.
     LaunchedEffect(creds) {
-        runCatching {
-            categories = service.getLiveCategories(creds.username, creds.password)
-            channels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
-            movies = service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
-            series = service.getSeriesList(creds.username, creds.password).filter { it.seriesId > 0 }
+        val live = CatalogCache.getLive() ?: CatalogCache.loadLiveFromDisk(context)
+        val vod = CatalogCache.getMovies() ?: CatalogCache.loadMoviesFromDisk(context)
+        val ser = CatalogCache.getSeries() ?: CatalogCache.loadSeriesFromDisk(context)
+
+        var haveAll = live != null && vod != null && ser != null
+        if (live != null) { categories = live.categories; channels = live.channels }
+        if (vod != null) movies = vod.movies
+        if (ser != null) series = ser.series
+
+        if (!haveAll) {
+            runCatching {
+                val newCategories = live?.categories ?: service.getLiveCategories(creds.username, creds.password)
+                val newChannels = live?.channels ?: service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
+                val newMovies = vod?.movies ?: service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
+                val newSeries = ser?.series ?: service.getSeriesList(creds.username, creds.password).filter { it.seriesId > 0 }
+                categories = newCategories
+                channels = newChannels
+                movies = newMovies
+                series = newSeries
+                if (live == null) CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
+                if (vod == null) CatalogCache.setMovies(context, CatalogCache.MovieData(service.getVodCategories(creds.username, creds.password), newMovies))
+                if (ser == null) CatalogCache.setSeries(context, CatalogCache.SeriesData(service.getSeriesCategories(creds.username, creds.password), newSeries))
+            }
         }
         loading = false
     }
@@ -59,18 +83,25 @@ fun SearchScreen(creds: XtreamCredentials) {
         SeriesDetail(series = s, creds = creds, service = service, onBack = { openSeries = null })
         return
     }
-    openChannel?.let { ch ->
-        LiveFullscreenPlayer(
-            creds = creds,
-            service = service,
-            categories = categories,
-            channels = channels,
-            channel = ch,
-            onChannelChange = { openChannel = it },
-            onExit = { openChannel = null },
-        )
-        return
+
+    // Plein ecran publie dans FullscreenHost (rendu hors marge overscan par
+    // MainActivity) au lieu d'etre affiche inline ici.
+    LaunchedEffect(openChannel) {
+        FullscreenHost.content.value = openChannel?.let { ch ->
+            {
+                LiveFullscreenPlayer(
+                    creds = creds,
+                    service = service,
+                    categories = categories,
+                    channels = channels,
+                    channel = ch,
+                    onChannelChange = { openChannel = it },
+                    onExit = { openChannel = null },
+                )
+            }
+        }
     }
+    DisposableEffect(Unit) { onDispose { FullscreenHost.content.value = null } }
 
     val results = remember(query, channels, movies, series) {
         if (query.isBlank()) emptyList()

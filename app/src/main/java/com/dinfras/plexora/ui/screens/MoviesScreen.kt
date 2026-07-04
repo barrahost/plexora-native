@@ -70,26 +70,27 @@ fun MoviesScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
 
     LaunchedEffect(creds) {
         var haveData = memCached != null
+        var stale = memCached == null || CatalogCache.isStale(memCached.fetchedAt)
         if (!haveData) {
             CatalogCache.loadMoviesFromDisk(screenContext)?.let {
                 categories = it.categories
                 movies = it.movies
                 loading = false
                 haveData = true
+                stale = CatalogCache.isStale(it.fetchedAt)
             }
         }
-        // Le catalogue est deja recupere une fois en entier juste apres la
-        // connexion (CatalogDownloadScreen) : on ne relance pas l'appel
-        // reseau ici si on l'a deja, pour eviter un double appel qui
-        // declenchait un blocage cote serveur (HTTP 451).
-        if (!haveData) {
+        // Recupere une fois en entier juste apres la connexion
+        // (CatalogDownloadScreen) : on ne relance l'appel reseau ici que
+        // s'il n'y a rien en cache, ou que le cache a plus de 24h.
+        if (!haveData || stale) {
             runCatching {
                 val newCategories = service.getVodCategories(creds.username, creds.password)
                 val newMovies = service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
                 categories = newCategories
                 movies = newMovies
                 CatalogCache.setMovies(screenContext, CatalogCache.MovieData(newCategories, newMovies))
-            }.onFailure { error = it.message ?: it.toString() }
+            }.onFailure { if (!haveData) error = it.message ?: it.toString() }
         }
         loading = false
     }

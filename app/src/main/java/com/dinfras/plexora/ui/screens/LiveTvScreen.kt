@@ -45,26 +45,30 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
 
     LaunchedEffect(creds) {
         var haveData = memCached != null
+        var stale = memCached == null || CatalogCache.isStale(memCached.fetchedAt)
         if (!haveData) {
             CatalogCache.loadLiveFromDisk(context)?.let {
                 categories = it.categories
                 channels = it.channels
                 loading = false
                 haveData = true
+                stale = CatalogCache.isStale(it.fetchedAt)
             }
         }
         // Le catalogue est deja recupere une fois en entier juste apres la
-        // connexion (CatalogDownloadScreen) : on ne relance pas l'appel
-        // reseau ici si on l'a deja, pour eviter un double appel qui
-        // declenchait un blocage cote serveur (HTTP 451).
-        if (!haveData) {
+        // connexion (CatalogDownloadScreen) : on ne relance l'appel reseau
+        // ici que s'il n'y a rien en cache, ou que le cache a plus de 24h —
+        // sinon on declenchait un double appel qui provoquait un blocage
+        // cote serveur (HTTP 451), et le catalogue ne se rafraichissait
+        // plus jamais une fois telecharge.
+        if (!haveData || stale) {
             runCatching {
                 val newCategories = service.getLiveCategories(creds.username, creds.password)
                 val newChannels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
                 categories = newCategories
                 channels = newChannels
                 CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
-            }.onFailure { error = it.message ?: it.toString() }
+            }.onFailure { if (!haveData) error = it.message ?: it.toString() }
         }
         if (PlayerPrefs.getResumeLastChannel(context)) {
             val lastId = PlayerPrefs.getLastChannelId(context)

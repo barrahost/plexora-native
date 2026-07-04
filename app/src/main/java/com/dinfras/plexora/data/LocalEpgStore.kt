@@ -3,7 +3,10 @@ package com.dinfras.plexora.data
 import android.content.Context
 import android.util.Xml
 import com.squareup.moshi.Types
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Request
 import org.xmlpull.v1.XmlPullParser
@@ -23,7 +26,16 @@ object LocalEpgStore {
     private const val MAX_FUTURE_HOURS = 72L
 
     @Volatile private var cache: Map<String, List<EpgItem>>? = null
-    @Volatile private var refreshedThisSession = false
+
+    private enum class RefreshState { IDLE, RUNNING, DONE }
+    @Volatile private var refreshState = RefreshState.IDLE
+
+    // Portee de vie liee au processus, pas a un composable — sans ca, le
+    // telechargement (potentiellement volumineux) etait annule des que
+    // l'ecran qui l'avait lance disparaissait de la composition, laissant
+    // le verrou "deja fait cette session" pose alors que rien n'etait
+    // reellement en cache.
+    private val storeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val mapType = Types.newParameterizedType(
         Map::class.java,
@@ -133,16 +145,22 @@ object LocalEpgStore {
     }
 
     // Un seul telechargement complet par session (pas a chaque changement
-    // d'onglet) — appele en arriere-plan, sans bloquer l'affichage.
-    suspend fun refreshOnceIfNeeded(context: Context, creds: XtreamCredentials) {
-        if (refreshedThisSession) return
-        refreshedThisSession = true
-        refresh(context, creds)
+    // d'onglet), lance sur un scope qui survit a l'ecran appelant — sinon
+    // annule des que l'utilisateur navigue ailleurs pendant le telechargement.
+    // Si le telechargement echoue, le verrou est relache pour permettre un
+    // nouvel essai plus tard (au lieu de rester bloque toute la session).
+    fun refreshOnceIfNeeded(context: Context, creds: XtreamCredentials) {
+        if (refreshState != RefreshState.IDLE) return
+        refreshState = RefreshState.RUNNING
+        storeScope.launch {
+            val ok = refresh(context, creds)
+            refreshState = if (ok) RefreshState.DONE else RefreshState.IDLE
+        }
     }
 
     fun clear(context: Context) {
         cache = null
-        refreshedThisSession = false
+        refreshState = RefreshState.IDLE
         File(context.filesDir, FILE_NAME).delete()
     }
 }

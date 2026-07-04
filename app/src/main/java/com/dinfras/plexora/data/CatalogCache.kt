@@ -10,16 +10,19 @@ import java.io.File
 // sont ecrits sur le disque de l'appareil apres la saisie des identifiants,
 // et relus au demarrage au lieu de refaire les appels reseau. Ce cache
 // combine memoire (instantane pendant la session) + disque (survit a un
-// redemarrage de l'appli), avec rafraichissement discret en arriere-plan.
+// redemarrage de l'appli), avec rafraichissement discret en arriere-plan
+// uniquement lorsque les donnees sont perimees (au-dela de STALE_AFTER_MS).
 object CatalogCache {
-    @JsonClass(generateAdapter = true)
-    data class LiveData(val categories: List<XtreamCategory>, val channels: List<XtreamChannel>)
+    const val STALE_AFTER_MS = 24L * 60 * 60 * 1000 // 24h
 
     @JsonClass(generateAdapter = true)
-    data class MovieData(val categories: List<XtreamCategory>, val movies: List<XtreamMovie>)
+    data class LiveData(val categories: List<XtreamCategory>, val channels: List<XtreamChannel>, val fetchedAt: Long = System.currentTimeMillis())
 
     @JsonClass(generateAdapter = true)
-    data class SeriesData(val categories: List<XtreamCategory>, val series: List<XtreamSeries>)
+    data class MovieData(val categories: List<XtreamCategory>, val movies: List<XtreamMovie>, val fetchedAt: Long = System.currentTimeMillis())
+
+    @JsonClass(generateAdapter = true)
+    data class SeriesData(val categories: List<XtreamCategory>, val series: List<XtreamSeries>, val fetchedAt: Long = System.currentTimeMillis())
 
     @Volatile private var live: LiveData? = null
     @Volatile private var movies: MovieData? = null
@@ -32,6 +35,8 @@ object CatalogCache {
     fun getLive() = live
     fun getMovies() = movies
     fun getSeries() = series
+
+    fun isStale(fetchedAt: Long): Boolean = System.currentTimeMillis() - fetchedAt > STALE_AFTER_MS
 
     suspend fun setLive(context: Context, data: LiveData) {
         live = data

@@ -30,7 +30,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val service = remember(creds) { XtreamClient.create(creds.url) }
 
     var liveCount by remember { mutableStateOf<Int?>(null) }
@@ -63,12 +62,11 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
             CatalogCache.setSeries(context, CatalogCache.SeriesData(seriesCats, seriesList))
         }.onFailure { if (error == null) error = it.message ?: it.toString() }
 
-        // Le guide TV complet (XMLTV) peut etre volumineux — ne bloque pas
-        // l'entree dans l'appli, se termine en arriere-plan.
-        scope.launch {
-            LocalEpgStore.loadFromDisk(context)
-            LocalEpgStore.refreshOnceIfNeeded(context, creds)
-        }
+        // Le guide TV complet (XMLTV) peut etre volumineux — se telecharge
+        // sur un scope independant de cet ecran (voir LocalEpgStore), pour
+        // ne pas etre annule quand on entre dans l'appli juste apres.
+        LocalEpgStore.loadFromDisk(context)
+        LocalEpgStore.refreshOnceIfNeeded(context, creds)
 
         onComplete()
     }

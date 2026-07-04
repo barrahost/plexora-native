@@ -43,13 +43,14 @@ fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -
     // appels reseau, qui declenchaient un blocage cote serveur (HTTP 451).
     LaunchedEffect(creds) {
         var live = CatalogCache.getLive() ?: CatalogCache.loadLiveFromDisk(context)
-        if (live == null) {
+        val stale = live == null || CatalogCache.isStale(live!!.fetchedAt)
+        if (live == null || stale) {
             runCatching {
                 val newCategories = service.getLiveCategories(creds.username, creds.password)
                 val newChannels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
                 CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
                 live = CatalogCache.LiveData(newCategories, newChannels)
-            }.onFailure { error = it.message ?: it.toString() }
+            }.onFailure { if (live == null) error = it.message ?: it.toString() }
         }
         live?.let { data ->
             val radioCatIds = data.categories.filter { it.categoryName.contains("radio", ignoreCase = true) }.map { it.categoryId }.toSet()

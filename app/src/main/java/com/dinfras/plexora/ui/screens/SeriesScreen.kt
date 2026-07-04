@@ -72,26 +72,27 @@ fun SeriesScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
 
     LaunchedEffect(creds) {
         var haveData = memCached != null
+        var stale = memCached == null || CatalogCache.isStale(memCached.fetchedAt)
         if (!haveData) {
             CatalogCache.loadSeriesFromDisk(screenContext)?.let {
                 categories = it.categories
                 seriesList = it.series
                 loading = false
                 haveData = true
+                stale = CatalogCache.isStale(it.fetchedAt)
             }
         }
-        // Le catalogue est deja recupere une fois en entier juste apres la
-        // connexion (CatalogDownloadScreen) : on ne relance pas l'appel
-        // reseau ici si on l'a deja, pour eviter un double appel qui
-        // declenchait un blocage cote serveur (HTTP 451).
-        if (!haveData) {
+        // Recupere une fois en entier juste apres la connexion
+        // (CatalogDownloadScreen) : on ne relance l'appel reseau ici que
+        // s'il n'y a rien en cache, ou que le cache a plus de 24h.
+        if (!haveData || stale) {
             runCatching {
                 val newCategories = service.getSeriesCategories(creds.username, creds.password)
                 val newSeries = service.getSeriesList(creds.username, creds.password).filter { it.seriesId > 0 }
                 categories = newCategories
                 seriesList = newSeries
                 CatalogCache.setSeries(screenContext, CatalogCache.SeriesData(newCategories, newSeries))
-            }.onFailure { error = it.message ?: it.toString() }
+            }.onFailure { if (!haveData) error = it.message ?: it.toString() }
         }
         loading = false
     }
