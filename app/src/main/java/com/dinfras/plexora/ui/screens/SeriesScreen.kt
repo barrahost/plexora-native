@@ -3,7 +3,9 @@ package com.dinfras.plexora.ui.screens
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
@@ -31,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -165,19 +168,31 @@ fun SeriesScreen(creds: XtreamCredentials) {
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 items(filtered) { s ->
+                    var isFocused by remember(s) { mutableStateOf(false) }
+                    val scale by animateFloatAsState(if (isFocused) 1.08f else 1f, label = "posterScale")
                     Column(
                         Modifier
-                            .onFocusChanged { if (it.isFocused) focused = s }
+                            .onFocusChanged { isFocused = it.isFocused; if (it.isFocused) focused = s }
                             .focusable()
-                            .clickable { selected = s },
+                            .clickable { selected = s }
+                            .scale(scale),
                     ) {
-                        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1F2937))) {
+                        Box(
+                            Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1F2937))
+                                .then(if (isFocused) Modifier.border(3.dp, PlexoraOrange, RoundedCornerShape(10.dp)) else Modifier),
+                        ) {
                             if (!s.cover.isNullOrBlank()) {
                                 AsyncImage(model = s.cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                             }
                         }
                         Spacer(Modifier.height(4.dp))
-                        Text(s.name, maxLines = 2, fontSize = MaterialTheme.typography.bodySmall.fontSize)
+                        Text(
+                            s.name,
+                            maxLines = 2,
+                            fontSize = MaterialTheme.typography.bodySmall.fontSize,
+                            color = if (isFocused) PlexoraOrange else Color.White,
+                            fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+                        )
                     }
                 }
             }
