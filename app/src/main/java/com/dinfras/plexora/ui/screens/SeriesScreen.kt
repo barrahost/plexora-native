@@ -379,15 +379,30 @@ private fun SeasonRow(season: String, episodes: List<SeriesEpisode>, fallbackCov
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(episodes) { e ->
-                Column(Modifier.width(220.dp).clickable { onSelectEpisode(e) }) {
-                    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(Color(0xFF1F2937))) {
+                var isFocused by remember { mutableStateOf(false) }
+                Column(
+                    Modifier.width(220.dp)
+                        .onFocusChanged { isFocused = it.isFocused }
+                        .focusable()
+                        .clickable { onSelectEpisode(e) },
+                ) {
+                    Box(
+                        Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF1F2937))
+                            .then(if (isFocused) Modifier.border(3.dp, PlexoraOrange, RoundedCornerShape(8.dp)) else Modifier),
+                    ) {
                         val thumb = e.info?.movieImage ?: fallbackCover
                         if (!thumb.isNullOrBlank()) {
                             AsyncImage(model = thumb, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                         }
                     }
                     Spacer(Modifier.height(4.dp))
-                    Text("E${e.episodeNum} — ${e.title ?: "Épisode ${e.episodeNum}"}", color = Color.White, maxLines = 1, fontSize = 13.sp)
+                    Text(
+                        "E${e.episodeNum} — ${e.title ?: "Épisode ${e.episodeNum}"}",
+                        color = if (isFocused) PlexoraOrange else Color.White,
+                        maxLines = 1,
+                        fontSize = 13.sp,
+                    )
                 }
             }
         }
@@ -402,18 +417,23 @@ private fun SeasonRow(season: String, episodes: List<SeriesEpisode>, fallbackCov
 
 @Composable
 fun ActionButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, primary: Boolean = false, onClick: () -> Unit) {
+    var isFocused by remember { mutableStateOf(false) }
+    val bg = if (isFocused) PlexoraOrange else if (primary) Color.White else Color(0xFF1F2937)
+    val fg = if (isFocused) Color.Black else if (primary) Color.Black else Color.White
     Row(
         Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(if (primary) Color.White else Color(0xFF1F2937))
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable(enabled = enabled)
+            .background(bg)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp)
             .alpha(if (enabled) 1f else 0.5f),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = if (primary) Color.Black else Color.White, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
-        Text(label, color = if (primary) Color.Black else Color.White, fontWeight = if (primary) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
+        Text(label, color = fg, fontWeight = if (primary || isFocused) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
     }
 }
 

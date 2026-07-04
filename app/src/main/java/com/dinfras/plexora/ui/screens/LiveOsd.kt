@@ -294,35 +294,43 @@ private fun QuickBar(
 
 @Composable
 private fun QuickBarTile(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, active: Boolean = false, onClick: () -> Unit) {
+    var isFocused by remember { mutableStateOf(false) }
+    val fg = if (isFocused) Color.Black else Color.White
     Column(
         Modifier
             .width(90.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(if (active) PlexoraOrange.copy(alpha = 0.3f) else Color(0xFF1F2937))
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
             .clickable(onClick = onClick)
+            .background(if (isFocused) Color.White else if (active) PlexoraOrange.copy(alpha = 0.3f) else Color(0xFF1F2937))
             .padding(vertical = 10.dp, horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = label, tint = fg, modifier = Modifier.size(22.dp))
         Spacer(Modifier.height(4.dp))
-        Text(label, color = Color.White, fontSize = 11.sp, maxLines = 1)
+        Text(label, color = fg, fontSize = 11.sp, maxLines = 1)
     }
 }
 
 @Composable
 private fun QuickBarChannelTile(channel: XtreamChannel, active: Boolean, onClick: () -> Unit) {
+    var isFocused by remember { mutableStateOf(false) }
+    val fg = if (isFocused) Color.Black else Color.White
     Column(
         Modifier
             .width(90.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(if (active) PlexoraOrange.copy(alpha = 0.3f) else Color(0xFF1F2937))
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
             .clickable(onClick = onClick)
+            .background(if (isFocused) Color.White else if (active) PlexoraOrange.copy(alpha = 0.3f) else Color(0xFF1F2937))
             .padding(vertical = 10.dp, horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         ChannelLogo(channel.name, channel.streamIcon, size = 28.dp)
         Spacer(Modifier.height(4.dp))
-        Text(channel.name, color = Color.White, fontSize = 11.sp, maxLines = 1)
+        Text(channel.name, color = fg, fontSize = 11.sp, maxLines = 1)
     }
 }
 
@@ -456,17 +464,24 @@ fun ChannelEpgList(channel: XtreamChannel, epg: List<EpgItem>, modifier: Modifie
         LazyColumn {
             items(epg) { item ->
                 val isNow = item.nowPlaying == 1
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                var isFocused by remember { mutableStateOf(false) }
+                Row(
+                    Modifier.fillMaxWidth()
+                        .onFocusChanged { isFocused = it.isFocused }
+                        .focusable()
+                        .background(if (isFocused) Color.White else Color.Transparent)
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                ) {
                     Text(
                         formatTime(item.startTimestamp),
-                        color = if (isNow) PlexoraOrange else Color(0xFF9CA3AF),
+                        color = if (isFocused) Color.Black else if (isNow) PlexoraOrange else Color(0xFF9CA3AF),
                         fontSize = 13.sp,
                         modifier = Modifier.width(52.dp),
                     )
                     Text(
                         decodeEpgText(item.title),
-                        color = if (isNow) PlexoraOrange else Color.White,
-                        fontWeight = if (isNow) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isFocused) Color.Black else if (isNow) PlexoraOrange else Color.White,
+                        fontWeight = if (isNow || isFocused) FontWeight.Bold else FontWeight.Normal,
                         fontSize = 13.sp,
                         maxLines = 1,
                     )

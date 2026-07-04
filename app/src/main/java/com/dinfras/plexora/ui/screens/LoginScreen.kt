@@ -23,6 +23,8 @@ private sealed interface LoginState {
     data object LoggingIn : LoginState
 }
 
+private class InvalidCredentialsException : Exception("Identifiants incorrects.")
+
 @Composable
 fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
     val context = LocalContext.current
@@ -107,11 +109,15 @@ fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
                             runCatching {
                                 val creds = XtreamCredentials(url, username, password)
                                 val info = XtreamClient.create(creds.url).getAccountInfo(creds.username, creds.password)
-                                if (info.userInfo?.auth != 1) error("Identifiants incorrects.")
+                                if (info.userInfo?.auth != 1) throw InvalidCredentialsException()
                                 CredentialsStore.save(context, creds)
                                 onLoggedIn(creds)
                             }.onFailure {
-                                error = "Impossible de joindre le serveur.\n(${it.message})"
+                                error = if (it is InvalidCredentialsException) {
+                                    "Identifiants incorrects. Vérifie l'URL, le nom d'utilisateur et le mot de passe."
+                                } else {
+                                    "Impossible de joindre le serveur.\n(${it.message})"
+                                }
                                 state = LoginState.Manual
                             }
                         }
