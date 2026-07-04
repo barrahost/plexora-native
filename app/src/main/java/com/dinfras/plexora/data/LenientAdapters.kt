@@ -67,7 +67,9 @@ private object LenientStringAdapter {
     @FromJson
     fun fromJson(reader: JsonReader): String {
         return when (reader.peek()) {
-            JsonReader.Token.STRING -> reader.nextString()
+            // fixMojibake corrige au passage le texte UTF-8 encode deux fois
+            // (ex. noms de chaines/stations radio), pour tous les champs texte de l'appli.
+            JsonReader.Token.STRING -> fixMojibake(reader.nextString())
             JsonReader.Token.NUMBER -> reader.nextDouble().let { if (it == it.toLong().toDouble()) it.toLong().toString() else it.toString() }
             JsonReader.Token.BOOLEAN -> reader.nextBoolean().toString()
             JsonReader.Token.NULL -> { reader.nextNull<Unit>(); "" }
