@@ -159,20 +159,26 @@ private fun AppearanceSection() {
             fontSize = MaterialTheme.typography.bodySmall.fontSize,
         )
         Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Slider(
-                value = overlayAlpha,
-                onValueChange = {
-                    overlayAlpha = it
-                    com.dinfras.plexora.ui.AppUiState.overlayAlpha.floatValue = it
-                    scope.launch { UiPrefs.setOverlayAlpha(context, it) }
-                },
-                valueRange = 0f..1f,
-                modifier = Modifier.weight(1f),
-                colors = SliderDefaults.colors(thumbColor = PlexoraOrange, activeTrackColor = PlexoraOrange),
-            )
-            Spacer(Modifier.width(12.dp))
-            Text("${(overlayAlpha * 100).toInt()}%", modifier = Modifier.widthIn(min = 40.dp))
+        // Un curseur (Slider) se manipule mal a la telecommande D-pad — on
+        // utilise des paliers selectionnables par OK, comme le reste des
+        // reglages de l'appli (tampon, decodeur...).
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(0f, 0.25f, 0.5f, 0.75f, 1f).forEach { pct ->
+                val active = kotlin.math.abs(overlayAlpha - pct) < 0.01f
+                Text(
+                    "${(pct * 100).toInt()}%",
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                        .background(if (active) PlexoraViolet.copy(alpha = 0.25f) else Color(0xFF1F2937))
+                        .clickable {
+                            overlayAlpha = pct
+                            com.dinfras.plexora.ui.AppUiState.overlayAlpha.floatValue = pct
+                            scope.launch { UiPrefs.setOverlayAlpha(context, pct) }
+                        }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    color = if (active) Color.White else Color(0xFF9CA3AF),
+                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                )
+            }
         }
 
         Spacer(Modifier.height(28.dp))
