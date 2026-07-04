@@ -183,7 +183,6 @@ fun SeriesDetail(series: XtreamSeries, creds: XtreamCredentials, service: Xtream
     var episodesBySeason by remember { mutableStateOf<Map<String, List<SeriesEpisode>>>(emptyMap()) }
     var selectedSeason by remember { mutableStateOf<String?>(null) }
     var activeEp by remember { mutableStateOf<SeriesEpisode?>(null) }
-    var fullscreen by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var saved by remember { mutableStateOf(false) }
 
@@ -198,20 +197,21 @@ fun SeriesDetail(series: XtreamSeries, creds: XtreamCredentials, service: Xtream
         loading = false
     }
 
-    // Bouton Retour : plein ecran -> episode ouvert -> fiche serie
-    BackHandler(enabled = fullscreen) { fullscreen = false }
-    BackHandler(enabled = !fullscreen && activeEp != null) { activeEp = null }
-    BackHandler(enabled = !fullscreen && activeEp == null) { onBack() }
+    // Bouton Retour : episode ouvert -> fiche serie. Selectionner un
+    // episode demarre directement la lecture en plein ecran, sans etape
+    // intermediaire d'apercu — comme TiviMate.
+    BackHandler(enabled = activeEp != null) { activeEp = null }
+    BackHandler(enabled = activeEp == null) { onBack() }
 
     val ep = activeEp
     if (ep != null) {
-        EpisodePlayer(
-            series = series,
-            episode = ep,
-            creds = creds,
-            fullscreen = fullscreen,
-            onFullscreen = { fullscreen = it },
-            onBack = { activeEp = null },
+        val url = remember(ep) {
+            XtreamClient.seriesStreamUrl(creds.url, creds.username, creds.password, ep.id, ep.containerExtension ?: "mp4")
+        }
+        FullscreenPlayer(
+            streamUrl = url,
+            title = "${series.name} — Épisode ${ep.episodeNum}",
+            onClose = { activeEp = null },
         )
         return
     }
@@ -372,34 +372,3 @@ fun ActionButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: S
     }
 }
 
-@androidx.media3.common.util.UnstableApi
-@Composable
-private fun EpisodePlayer(
-    series: XtreamSeries,
-    episode: SeriesEpisode,
-    creds: XtreamCredentials,
-    fullscreen: Boolean,
-    onFullscreen: (Boolean) -> Unit,
-    onBack: () -> Unit,
-) {
-    val url = remember(episode) {
-        XtreamClient.seriesStreamUrl(creds.url, creds.username, creds.password, episode.id, episode.containerExtension ?: "mp4")
-    }
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
-        LiveVideoPlayer(url, Modifier.fillMaxSize().clickable { onFullscreen(true) })
-        Row(Modifier.align(Alignment.TopStart).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "Retour", tint = Color.White) }
-            Text(
-                "${series.name} — E${episode.episodeNum} ${episode.title ?: ""}",
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-        IconButton(onClick = { onFullscreen(true) }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
-            Icon(Icons.Filled.Fullscreen, contentDescription = "Plein écran", tint = Color.White)
-        }
-        if (fullscreen) {
-            FullscreenPlayer(streamUrl = url, title = "${series.name} — Épisode ${episode.episodeNum}", onClose = { onFullscreen(false) })
-        }
-    }
-}
