@@ -77,9 +77,15 @@ private object LenientStringAdapter {
         }
     }
 
+    // "value: String?" (nullable) est indispensable ici : la plupart des
+    // champs texte du catalogue (cover, stream_icon, epg_channel_id...) sont
+    // nullables. Moshi appelle quand meme cette methode avec null pour ces
+    // champs — un parametre non-nullable declenchait alors une
+    // NullPointerException a l'ecriture du cache (ex. "$.movies[0].cover"),
+    // empechant tout le fichier JSON d'etre sauvegarde sur le disque.
     @ToJson
-    fun toJson(writer: JsonWriter, value: String) {
-        writer.value(value)
+    fun toJson(writer: JsonWriter, value: String?) {
+        if (value == null) writer.nullValue() else writer.value(value)
     }
 }
 
