@@ -170,19 +170,23 @@ fun LiveFullscreenPlayer(
                             // les zaps suivants restent possibles pendant qu'elle est visible.
                             // Le zap reste dans la categorie selectionnee (repli sur la liste
                             // complete si la chaine courante n'en fait pas partie).
-                            if (osdStage == 0) {
-                                val catList = if (selectedCat == null) channels else channels.filter { it.categoryId == selectedCat }
-                                val zapList = if (catList.any { it.streamId == channel.streamId }) catList else channels
-                                val idx = zapList.indexOfFirst { it.streamId == channel.streamId }
-                                if (idx >= 0 && zapList.size > 1) {
-                                    val nextIdx = if (event.key == Key.DirectionUp) {
-                                        (idx - 1 + zapList.size) % zapList.size
-                                    } else {
-                                        (idx + 1) % zapList.size
-                                    }
-                                    onChannelChange(zapList[nextIdx])
-                                    showQuickBar = true
+                            //
+                            // Ne consomme l'evenement (true) QUE pour le zap (osdStage == 0) —
+                            // sinon (panneau chaines/categories ouvert), il faut le laisser
+                            // remonter au systeme de focus de Compose pour naviguer dans la
+                            // LazyColumn, sinon impossible de monter/descendre dans la liste.
+                            if (osdStage != 0) return@onKeyEvent false
+                            val catList = if (selectedCat == null) channels else channels.filter { it.categoryId == selectedCat }
+                            val zapList = if (catList.any { it.streamId == channel.streamId }) catList else channels
+                            val idx = zapList.indexOfFirst { it.streamId == channel.streamId }
+                            if (idx >= 0 && zapList.size > 1) {
+                                val nextIdx = if (event.key == Key.DirectionUp) {
+                                    (idx - 1 + zapList.size) % zapList.size
+                                } else {
+                                    (idx + 1) % zapList.size
                                 }
+                                onChannelChange(zapList[nextIdx])
+                                showQuickBar = true
                             }
                             true
                         }

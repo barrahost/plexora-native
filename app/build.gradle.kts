@@ -12,8 +12,13 @@ android {
         applicationId = "com.dinfras.plexora"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1-native"
+        // L'ancienne version Capacitor/WebView (meme applicationId) etait en
+        // versionCode 7 : Android refuse d'installer un code inferieur par
+        // dessus, faisant echouer silencieusement les mises a jour via
+        // Downloader sur les TV qui avaient encore l'ancienne app. Doit
+        // rester superieur a 7 et etre incremente a chaque APK publie.
+        versionCode = 8
+        versionName = "2.0"
     }
 
     buildTypes {
