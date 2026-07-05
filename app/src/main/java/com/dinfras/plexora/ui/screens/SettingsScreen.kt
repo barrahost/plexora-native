@@ -29,12 +29,13 @@ private data class BufferOption(val mode: BufferMode, val label: String, val des
 
 private class InvalidPlaylistCredentialsException : Exception("Identifiants incorrects.")
 
-// La date d'expiration change rarement : un seul appel serveur par session
-// suffit, pas un a chaque ouverture de la section Lecteur. Le cache est
-// invalide par compte (cle URL+utilisateur), sinon un changement de playlist
-// afficherait la date de l'ancien abonnement.
-private var cachedExpDate: Long? = null
-private var expDateCacheKey: String? = null
+// La date d'expiration de chaque playlist ne change pas souvent : un seul
+// appel serveur par playlist et par session suffit. Chaque playlist peut
+// avoir sa propre date de fin d'abonnement (comptes independants), d'ou un
+// cache par identifiant de playlist plutot qu'une seule valeur globale — et
+// l'affichage se fait au niveau de Listes de lecture (une ligne par
+// playlist), pas au niveau general du Lecteur.
+private val expDateCache = androidx.compose.runtime.mutableStateMapOf<String, Long?>()
 
 private val BUFFER_OPTIONS = listOf(
     BufferOption(BufferMode.NONE, "Aucun", "Latence minimale, très sensible aux coupures. Pour réseau très stable uniquement."),
@@ -128,6 +129,10 @@ private fun PlaylistsSection(activeCreds: XtreamCredentials, onSwitchPlaylist: (
                         }
                     }
                     Text(if (isActive) "Playlist active" else "Toucher pour activer", fontSize = MaterialTheme.typography.bodySmall.fontSize, color = Color.Gray)
+                    // Chaque playlist peut avoir sa propre date de fin
+                    // d'abonnement (comptes independants) : affichee ici,
+                    // sous CHAQUE playlist, plutot que globalement.
+                    SubscriptionExpiryLabel(p.id, p.toCredentials())
                 }
                 IconButton(onClick = {
                     scope.launch { PlaylistsStore.remove(context, p.id); refreshPlaylists() }
@@ -149,6 +154,42 @@ private fun PlaylistsSection(activeCreds: XtreamCredentials, onSwitchPlaylist: (
             }
         }
     }
+}
+
+@Composable
+private fun SubscriptionExpiryLabel(playlistId: String, creds: XtreamCredentials) {
+    if (creds.isM3u()) return // Pas de compte Xtream a interroger derriere un simple lien M3U.
+
+    LaunchedEffect(playlistId) {
+        if (!expDateCache.containsKey(playlistId)) {
+            runCatching {
+                val info = XtreamClient.create(creds.url).getAccountInfo(creds.username, creds.password)
+                expDateCache[playlistId] = info.userInfo?.expDate?.toLongOrNull()
+            }.onFailure { expDateCache[playlistId] = null }
+        }
+    }
+
+    val seconds = expDateCache[playlistId]
+    if (!expDateCache.containsKey(playlistId)) {
+        Text("Vérification de l'abonnement...", fontSize = MaterialTheme.typography.labelSmall.fontSize, color = Color.Gray)
+        return
+    }
+    if (seconds == null) {
+        Text("Date d'expiration non disponible.", fontSize = MaterialTheme.typography.labelSmall.fontSize, color = Color.Gray)
+        return
+    }
+    val daysLeft = ((seconds * 1000 - System.currentTimeMillis()) / (24L * 60 * 60 * 1000)).toInt()
+    val dateStr = remember(seconds) {
+        java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.FRANCE).format(java.util.Date(seconds * 1000))
+    }
+    val warn = daysLeft in 0..7
+    val expired = daysLeft < 0
+    Text(
+        if (expired) "Abonnement expiré depuis le $dateStr" else "Expire le $dateStr${if (warn) " (dans $daysLeft jour${if (daysLeft > 1) "s" else ""})" else ""}",
+        fontSize = MaterialTheme.typography.labelSmall.fontSize,
+        color = if (expired || warn) MaterialTheme.colorScheme.error else Color.Gray,
+        fontWeight = if (expired || warn) FontWeight.Bold else FontWeight.Normal,
+    )
 }
 
 private val TEXT_SCALE_OPTIONS = listOf(
@@ -279,24 +320,11 @@ private fun PlayerSection(activeCreds: XtreamCredentials, onLogout: () -> Unit) 
     var audioDecoder by remember { mutableStateOf(DecoderMode.AUTO) }
     var videoDecoder by remember { mutableStateOf(DecoderMode.AUTO) }
     var tunneling by remember { mutableStateOf(false) }
-    var expDate by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(Unit) {
         buffer = BufferPrefs.get(context)
         audioDecoder = PlayerPrefs.getAudioDecoder(context)
         videoDecoder = PlayerPrefs.getVideoDecoder(context)
         tunneling = PlayerPrefs.getTunneling(context)
-        val accountKey = "${activeCreds.url}|${activeCreds.username}"
-        // Pas de date d'expiration pour une playlist M3U (pas de compte Xtream
-        // a interroger derriere un simple lien).
-        if (expDateCacheKey != accountKey && !activeCreds.isM3u()) {
-            cachedExpDate = null
-            runCatching {
-                val info = XtreamClient.create(activeCreds.url).getAccountInfo(activeCreds.username, activeCreds.password)
-                cachedExpDate = info.userInfo?.expDate?.toLongOrNull()
-                expDateCacheKey = accountKey
-            }
-        }
-        expDate = if (activeCreds.isM3u()) null else cachedExpDate
     }
 
     Column(Modifier.fillMaxSize().widthIn(max = 520.dp).verticalScroll(rememberScrollState())) {
@@ -353,21 +381,11 @@ private fun PlayerSection(activeCreds: XtreamCredentials, onLogout: () -> Unit) 
         }
 
         Spacer(Modifier.height(28.dp))
-        Text("Abonnement", fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(8.dp))
-        expDate?.let { seconds ->
-            val daysLeft = ((seconds * 1000 - System.currentTimeMillis()) / (24L * 60 * 60 * 1000)).toInt()
-            val dateStr = remember(seconds) {
-                java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.FRANCE).format(java.util.Date(seconds * 1000))
-            }
-            val warn = daysLeft in 0..7
-            val expired = daysLeft < 0
-            Text(
-                if (expired) "Abonnement expiré depuis le $dateStr" else "Expire le $dateStr${if (warn) " (dans $daysLeft jour${if (daysLeft > 1) "s" else ""})" else ""}",
-                color = if (expired || warn) MaterialTheme.colorScheme.error else Color(0xFF9CA3AF),
-                fontWeight = if (expired || warn) FontWeight.Bold else FontWeight.Normal,
-            )
-        } ?: Text("Information non disponible.", color = Color.Gray, fontSize = MaterialTheme.typography.bodySmall.fontSize)
+        Text(
+            "La date d'expiration de l'abonnement s'affiche desormais dans Listes de lecture, sous chaque playlist.",
+            color = Color.Gray,
+            fontSize = MaterialTheme.typography.bodySmall.fontSize,
+        )
 
         Spacer(Modifier.height(24.dp))
         Button(onClick = {
