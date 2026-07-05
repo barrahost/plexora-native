@@ -81,13 +81,34 @@ fun LiveFullscreenPlayer(
         if (history.size > 20) history.removeRange(20, history.size)
     }
 
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    // requestFocus() echoue silencieusement si le conteneur n'est pas encore
+    // pose a l'ecran au moment de l'appel — au premier montage c'est
+    // frequent, et le focus reste alors sur la liste de chaines en dessous :
+    // aucune touche (OK, fleches) n'atteint le lecteur plein ecran. On
+    // reessaie donc jusqu'a ce qu'il capte reellement le focus.
+    var hasFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        var tries = 0
+        while (!hasFocus && tries < 40) {
+            runCatching { focusRequester.requestFocus() }
+            tries++
+            delay(25)
+        }
+    }
 
     // Quand une incrustation se ferme (barre rapide, panneaux, guide), le focus
     // etait sur un de ses elements desormais disparus — on le ramene sur le
     // conteneur video pour que la telecommande reste operationnelle.
     LaunchedEffect(showQuickBar, osdStage, showGrid) {
-        if (!showQuickBar && osdStage == 0 && !showGrid) focusRequester.requestFocus()
+        if (!showQuickBar && osdStage == 0 && !showGrid) {
+            var tries = 0
+            while (tries < 20) {
+                runCatching { focusRequester.requestFocus() }
+                if (hasFocus) break
+                tries++
+                delay(25)
+            }
+        }
     }
 
     LaunchedEffect(osdStage, channel) {
@@ -122,6 +143,7 @@ fun LiveFullscreenPlayer(
             .fillMaxSize()
             .background(Color.Black)
             .focusRequester(focusRequester)
+            .onFocusChanged { hasFocus = it.isFocused }
             .focusable()
             .onKeyEvent { event ->
                 if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {

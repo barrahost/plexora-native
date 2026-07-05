@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -53,7 +54,18 @@ fun FullscreenPlayer(streamUrl: String, title: String, onClose: () -> Unit) {
     var positionMs by remember { mutableStateOf(0L) }
     var durationMs by remember { mutableStateOf(0L) }
 
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    // requestFocus() echoue silencieusement si le conteneur n'est pas encore
+    // pose a l'ecran — on reessaie jusqu'a ce qu'il capte reellement le focus,
+    // sinon les touches (OK, avance/recul) ne lui parviennent pas.
+    var hasFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        var tries = 0
+        while (!hasFocus && tries < 40) {
+            runCatching { focusRequester.requestFocus() }
+            tries++
+            delay(25)
+        }
+    }
 
     // Se referme toute seule apres quelques secondes sans interaction, comme
     // n'importe quel lecteur video (YouTube, Netflix...).
@@ -84,6 +96,7 @@ fun FullscreenPlayer(streamUrl: String, title: String, onClose: () -> Unit) {
             .fillMaxSize()
             .background(Color.Black)
             .focusRequester(focusRequester)
+            .onFocusChanged { hasFocus = it.isFocused }
             .focusable()
             .onKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
