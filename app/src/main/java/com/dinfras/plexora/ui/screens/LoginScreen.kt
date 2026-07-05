@@ -1,14 +1,20 @@
 package com.dinfras.plexora.ui.screens
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -32,9 +38,11 @@ fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
     val deviceId = remember { getDeviceId(context) }
 
     var state by remember { mutableStateOf<LoginState>(LoginState.CheckingProvisioning) }
+    var isM3uMode by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var m3uLink by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
 
     // 1) Identifiants deja enregistres localement -> connexion directe
@@ -49,17 +57,30 @@ fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
         val provisioned = DeviceProvisioningClient.lookup(deviceId)
         if (provisioned.isNotEmpty()) {
             // Comme HotPlayer, un appareil peut avoir plusieurs playlists
-            // associees : on les importe toutes dans PlaylistsStore (deja
-            // utilise par Parametres > Listes de lecture pour switcher entre
-            // comptes), la premiere devenant la playlist active au demarrage.
-            provisioned.forEachIndexed { index, p ->
-                val creds = XtreamCredentials(p.serverUrl, p.username, p.password)
-                val label = p.label?.takeIf { it.isNotBlank() } ?: "Playlist ${index + 1}"
-                PlaylistsStore.upsert(context, label, creds)
+            // associees, Xtream ou M3U : on les importe toutes dans
+            // PlaylistsStore (deja utilise par Parametres > Listes de lecture
+            // pour switcher entre comptes), la premiere devenant active.
+            val importedCreds = provisioned.mapIndexedNotNull { index, p ->
+                val creds = if (p.type == "m3u") {
+                    p.m3uLink?.let { m3uCredentials(it) }
+                } else {
+                    if (p.serverUrl != null && p.username != null && p.password != null) {
+                        XtreamCredentials(p.serverUrl, p.username, p.password)
+                    } else null
+                }
+                creds?.let {
+                    val label = p.label?.takeIf { l -> l.isNotBlank() } ?: "Playlist ${index + 1}"
+                    PlaylistsStore.upsert(context, label, it)
+                    it
+                }
             }
-            val active = XtreamCredentials(provisioned[0].serverUrl, provisioned[0].username, provisioned[0].password)
-            CredentialsStore.save(context, active)
-            onLoggedIn(active)
+            val active = importedCreds.firstOrNull()
+            if (active != null) {
+                CredentialsStore.save(context, active)
+                onLoggedIn(active)
+            } else {
+                state = LoginState.Manual
+            }
         } else {
             state = LoginState.Manual
         }
@@ -78,32 +99,52 @@ fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
                     modifier = Modifier.width(220.dp),
                 )
                 Spacer(Modifier.height(8.dp))
-                Text("Connecte-toi avec tes identifiants Xtream", fontSize = 14.sp)
-                Spacer(Modifier.height(24.dp))
+                Text("Connecte-toi avec ton compte Xtream ou un lien M3U", fontSize = 14.sp)
+                Spacer(Modifier.height(20.dp))
 
-                OutlinedTextField(
-                    value = url, onValueChange = { url = it },
-                    label = { Text("URL du serveur") },
-                    placeholder = { Text("http://monserveur.com") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = username, onValueChange = { username = it },
-                    label = { Text("Nom d'utilisateur") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = password, onValueChange = { password = it },
-                    label = { Text("Mot de passe") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                // Segmented control : deux sources possibles, comme le
+                // selecteur equivalent ajoute dans l'admin panel.
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
+                ) {
+                    SegmentButton("Xtream", selected = !isM3uMode, modifier = Modifier.weight(1f)) { isM3uMode = false }
+                    SegmentButton("M3U", selected = isM3uMode, modifier = Modifier.weight(1f)) { isM3uMode = true }
+                }
+                Spacer(Modifier.height(16.dp))
+
+                if (isM3uMode) {
+                    OutlinedTextField(
+                        value = m3uLink, onValueChange = { m3uLink = it },
+                        label = { Text("Lien M3U") },
+                        placeholder = { Text("http://monserveur.com/get.php?...") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = url, onValueChange = { url = it },
+                        label = { Text("URL du serveur") },
+                        placeholder = { Text("http://monserveur.com") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = username, onValueChange = { username = it },
+                        label = { Text("Nom d'utilisateur") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = password, onValueChange = { password = it },
+                        label = { Text("Mot de passe") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
 
                 error?.let {
                     Spacer(Modifier.height(12.dp))
@@ -117,14 +158,24 @@ fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
                         state = LoginState.LoggingIn
                         scope.launch {
                             runCatching {
-                                val creds = XtreamCredentials(url, username, password)
-                                val info = XtreamClient.create(creds.url).getAccountInfo(creds.username, creds.password)
-                                if (info.userInfo?.auth != 1) throw InvalidCredentialsException()
-                                CredentialsStore.save(context, creds)
-                                onLoggedIn(creds)
+                                if (isM3uMode) {
+                                    val creds = m3uCredentials(m3uLink)
+                                    val catalog = M3uParser.fetchAndParse(m3uLink)
+                                    if (catalog.liveChannels.isEmpty() && catalog.movies.isEmpty() && catalog.series.isEmpty()) {
+                                        throw InvalidCredentialsException()
+                                    }
+                                    CredentialsStore.save(context, creds)
+                                    onLoggedIn(creds)
+                                } else {
+                                    val creds = XtreamCredentials(url, username, password)
+                                    val info = XtreamClient.create(creds.url).getAccountInfo(creds.username, creds.password)
+                                    if (info.userInfo?.auth != 1) throw InvalidCredentialsException()
+                                    CredentialsStore.save(context, creds)
+                                    onLoggedIn(creds)
+                                }
                             }.onFailure {
                                 error = if (it is InvalidCredentialsException) {
-                                    "Identifiants incorrects. Vérifie l'URL, le nom d'utilisateur et le mot de passe."
+                                    if (isM3uMode) "Lien M3U invalide ou vide." else "Identifiants incorrects. Vérifie l'URL, le nom d'utilisateur et le mot de passe."
                                 } else {
                                     "Impossible de joindre le serveur.\n(${it.message})"
                                 }
@@ -146,5 +197,23 @@ fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SegmentButton(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier
+            .clickable(onClick = onClick)
+            .background(if (selected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent)
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            fontSize = 13.sp,
+        )
     }
 }

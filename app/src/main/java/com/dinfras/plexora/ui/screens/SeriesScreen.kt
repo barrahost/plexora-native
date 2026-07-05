@@ -86,14 +86,25 @@ fun SeriesScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
         // (CatalogDownloadScreen) : on ne relance l'appel reseau ici que
         // s'il n'y a rien en cache, ou que le cache a plus de 24h.
         if (!haveData || stale) {
-            runCatching {
-                val newCategories = service.getSeriesCategories(creds.username, creds.password)
-                val newSeries = service.getSeriesList(creds.username, creds.password).filter { it.seriesId > 0 }
-                categories = newCategories
-                seriesList = newSeries
-                CatalogCache.setSeries(screenContext, CatalogCache.SeriesData(newCategories, newSeries))
-            }.onFailure { if (!haveData) error = friendlyNetworkError(it) }
+            if (creds.isM3u()) {
+                val catalog = M3uCatalogSync.refreshAll(screenContext, creds)
+                if (catalog != null) {
+                    categories = catalog.seriesCategories
+                    seriesList = catalog.series
+                } else if (!haveData) {
+                    error = "Impossible de récupérer la playlist M3U."
+                }
+            } else {
+                runCatching {
+                    val newCategories = service.getSeriesCategories(creds.username, creds.password)
+                    val newSeries = service.getSeriesList(creds.username, creds.password).filter { it.seriesId > 0 }
+                    categories = newCategories
+                    seriesList = newSeries
+                    CatalogCache.setSeries(screenContext, CatalogCache.SeriesData(newCategories, newSeries))
+                }.onFailure { if (!haveData) error = friendlyNetworkError(it) }
+            }
         }
+        M3uSeriesEpisodesStore.loadFromDisk(screenContext)
         loading = false
     }
 
@@ -227,11 +238,18 @@ fun SeriesDetail(series: XtreamSeries, creds: XtreamCredentials, service: Xtream
 
     LaunchedEffect(series) {
         saved = MyListStore.isSavedSeries(context, series.seriesId)
-        runCatching {
-            val result = service.getSeriesInfo(creds.username, creds.password, series.seriesId)
-            info = result.info
-            episodesBySeason = result.episodes ?: emptyMap()
+        if (creds.isM3u()) {
+            // Pas d'endpoint get_series_info pour une playlist M3U : les
+            // episodes sont deja connus depuis le parsing (M3uSeriesEpisodesStore).
+            episodesBySeason = M3uSeriesEpisodesStore.episodesFor(series.seriesId).groupBy { it.season.toString() }
             selectedSeason = episodesBySeason.keys.firstOrNull()
+        } else {
+            runCatching {
+                val result = service.getSeriesInfo(creds.username, creds.password, series.seriesId)
+                info = result.info
+                episodesBySeason = result.episodes ?: emptyMap()
+                selectedSeason = episodesBySeason.keys.firstOrNull()
+            }
         }
         loading = false
     }
@@ -248,7 +266,9 @@ fun SeriesDetail(series: XtreamSeries, creds: XtreamCredentials, service: Xtream
     // tout l'ecran de la TV.
     LaunchedEffect(ep) {
         if (ep != null) {
-            val url = XtreamClient.seriesStreamUrl(creds.url, creds.username, creds.password, ep.id, ep.containerExtension ?: "mp4")
+            // Un episode issu d'une playlist M3U a directement son URL de flux
+            // stockee dans "id" (pas de stream_id Xtream a combiner).
+            val url = if (ep.id.startsWith("http")) ep.id else XtreamClient.seriesStreamUrl(creds.url, creds.username, creds.password, ep.id, ep.containerExtension ?: "mp4")
             val content: @Composable () -> Unit = { FullscreenPlayer(streamUrl = url, title = "${series.name} — Épisode ${ep.episodeNum}", onClose = { activeEp = null }) }
             FullscreenHost.content.value = content
         } else {
@@ -317,7 +337,7 @@ fun SeriesDetail(series: XtreamSeries, creds: XtreamCredentials, service: Xtream
             ) { activeEp = firstEp }
             ActionButton(icon = Icons.Filled.OpenInNew, label = "Ouvrir dans un lecteur externe", enabled = firstEp != null) {
                 val e = firstEp ?: return@ActionButton
-                val url = XtreamClient.seriesStreamUrl(creds.url, creds.username, creds.password, e.id, e.containerExtension ?: "mp4")
+                val url = if (e.id.startsWith("http")) e.id else XtreamClient.seriesStreamUrl(creds.url, creds.username, creds.password, e.id, e.containerExtension ?: "mp4")
                 runCatching {
                     context.startActivity(
                         Intent(Intent.ACTION_VIEW).apply {

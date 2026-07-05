@@ -50,12 +50,18 @@ fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -
         var live = CatalogCache.getLive() ?: CatalogCache.loadLiveFromDisk(context)
         val stale = live == null || CatalogCache.isStale(live!!.fetchedAt)
         if (live == null || stale) {
-            runCatching {
-                val newCategories = service.getLiveCategories(creds.username, creds.password)
-                val newChannels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
-                CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
-                live = CatalogCache.LiveData(newCategories, newChannels)
-            }.onFailure { if (live == null) error = friendlyNetworkError(it) }
+            if (creds.isM3u()) {
+                val catalog = M3uCatalogSync.refreshAll(context, creds)
+                if (catalog != null) live = CatalogCache.LiveData(catalog.liveCategories, catalog.liveChannels)
+                else if (live == null) error = "Impossible de récupérer la playlist M3U."
+            } else {
+                runCatching {
+                    val newCategories = service.getLiveCategories(creds.username, creds.password)
+                    val newChannels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
+                    CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
+                    live = CatalogCache.LiveData(newCategories, newChannels)
+                }.onFailure { if (live == null) error = friendlyNetworkError(it) }
+            }
         }
         live?.let { data ->
             val radioCatIds = data.categories.filter { it.categoryName.contains("radio", ignoreCase = true) }.map { it.categoryId }.toSet()
@@ -179,7 +185,7 @@ fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -
                         )
                     }
                     if (station != null) {
-                        val url = remember(station) { XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, station.streamId) }
+                        val url = remember(station) { station.directUrl ?: XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, station.streamId) }
                         // Lecture audio : le player video sert de moteur de lecture, la surface reste noire
                         Box(Modifier.size(1.dp)) { LiveVideoPlayer(url, Modifier.size(1.dp), showLoadingIndicator = false) }
                     }

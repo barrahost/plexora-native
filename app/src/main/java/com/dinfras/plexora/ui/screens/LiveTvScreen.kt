@@ -62,13 +62,23 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
         // cote serveur (HTTP 451), et le catalogue ne se rafraichissait
         // plus jamais une fois telecharge.
         if (!haveData || stale) {
-            runCatching {
-                val newCategories = service.getLiveCategories(creds.username, creds.password)
-                val newChannels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
-                categories = newCategories
-                channels = newChannels
-                CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
-            }.onFailure { if (!haveData) error = friendlyNetworkError(it) }
+            if (creds.isM3u()) {
+                val catalog = M3uCatalogSync.refreshAll(context, creds)
+                if (catalog != null) {
+                    categories = catalog.liveCategories
+                    channels = catalog.liveChannels
+                } else if (!haveData) {
+                    error = "Impossible de récupérer la playlist M3U."
+                }
+            } else {
+                runCatching {
+                    val newCategories = service.getLiveCategories(creds.username, creds.password)
+                    val newChannels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
+                    categories = newCategories
+                    channels = newChannels
+                    CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
+                }.onFailure { if (!haveData) error = friendlyNetworkError(it) }
+            }
         }
         if (PlayerPrefs.getResumeLastChannel(context)) {
             val lastId = PlayerPrefs.getLastChannelId(context)
@@ -82,7 +92,9 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
     // cache local au lieu d'interroger le serveur chaine par chaine.
     LaunchedEffect(creds) {
         LocalEpgStore.loadFromDisk(context)
-        LocalEpgStore.refreshOnceIfNeeded(context, creds)
+        // Pour une M3U, le guide est deja declenche via M3uCatalogSync (url-tvg
+        // de l'en-tete) — il n'y a pas de xmltv.php a interroger ici.
+        if (!creds.isM3u()) LocalEpgStore.refreshOnceIfNeeded(context, creds)
     }
 
     // Retient la derniere chaine regardee pour la reprendre au prochain
@@ -176,7 +188,7 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                         }
                     } else {
                         val url = remember(channel) {
-                            XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, channel.streamId)
+                            channel.directUrl ?: XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, channel.streamId)
                         }
                         LiveVideoPlayer(url, Modifier.fillMaxSize().clickable { fullscreen = true })
                         IconButton(onClick = { fullscreen = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)) {

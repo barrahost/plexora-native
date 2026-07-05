@@ -37,6 +37,10 @@ data class XtreamChannel(
     @Json(name = "category_id") val categoryId: String = "",
     @Json(name = "epg_channel_id") val epgChannelId: String? = null,
     @Json(name = "tv_archive") val tvArchive: Int = 0,
+    // Non nul uniquement pour les chaines issues d'une playlist M3U : l'URL du
+    // flux est alors directement celle du fichier M3U, pas reconstruite via
+    // Xtream (url/user/pass/stream_id).
+    val directUrl: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -48,6 +52,7 @@ data class XtreamMovie(
     @Json(name = "category_id") val categoryId: String = "",
     @Json(name = "container_extension") val containerExtension: String? = "mp4",
     @Json(name = "rating_5based") val rating5based: Double? = null,
+    val directUrl: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

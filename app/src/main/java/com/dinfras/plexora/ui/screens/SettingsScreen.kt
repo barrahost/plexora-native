@@ -115,7 +115,18 @@ private fun PlaylistsSection(activeCreds: XtreamCredentials, onSwitchPlaylist: (
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(p.label, fontWeight = FontWeight.SemiBold, color = if (isActive) PlexoraViolet else Color.White)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(p.label, fontWeight = FontWeight.SemiBold, color = if (isActive) PlexoraViolet else Color.White)
+                        if (p.toCredentials().isM3u()) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "M3U",
+                                fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                                color = Color(0xFF9CA3AF),
+                                modifier = Modifier.background(Color(0xFF374151), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 1.dp),
+                            )
+                        }
+                    }
                     Text(if (isActive) "Playlist active" else "Toucher pour activer", fontSize = MaterialTheme.typography.bodySmall.fontSize, color = Color.Gray)
                 }
                 IconButton(onClick = {
@@ -275,7 +286,9 @@ private fun PlayerSection(activeCreds: XtreamCredentials, onLogout: () -> Unit) 
         videoDecoder = PlayerPrefs.getVideoDecoder(context)
         tunneling = PlayerPrefs.getTunneling(context)
         val accountKey = "${activeCreds.url}|${activeCreds.username}"
-        if (expDateCacheKey != accountKey) {
+        // Pas de date d'expiration pour une playlist M3U (pas de compte Xtream
+        // a interroger derriere un simple lien).
+        if (expDateCacheKey != accountKey && !activeCreds.isM3u()) {
             cachedExpDate = null
             runCatching {
                 val info = XtreamClient.create(activeCreds.url).getAccountInfo(activeCreds.username, activeCreds.password)
@@ -283,7 +296,7 @@ private fun PlayerSection(activeCreds: XtreamCredentials, onLogout: () -> Unit) 
                 expDateCacheKey = accountKey
             }
         }
-        expDate = cachedExpDate
+        expDate = if (activeCreds.isM3u()) null else cachedExpDate
     }
 
     Column(Modifier.fillMaxSize().widthIn(max = 520.dp).verticalScroll(rememberScrollState())) {
@@ -411,10 +424,12 @@ private fun GeneralSection() {
 private fun AddPlaylistForm(onCancel: () -> Unit, onSaved: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var isM3uMode by remember { mutableStateOf(false) }
     var label by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var m3uLink by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
 
@@ -423,29 +438,56 @@ private fun AddPlaylistForm(onCancel: () -> Unit, onSaved: () -> Unit) {
     ) {
         Text("Nouvelle playlist", fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(10.dp))
+
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color(0xFF111827))) {
+            listOf(false to "Xtream", true to "M3U").forEach { (m3u, text) ->
+                Text(
+                    text,
+                    modifier = Modifier.weight(1f)
+                        .clickable { isM3uMode = m3u }
+                        .background(if (isM3uMode == m3u) PlexoraViolet.copy(alpha = 0.3f) else Color.Transparent)
+                        .padding(vertical = 10.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
+                    fontWeight = if (isM3uMode == m3u) FontWeight.Bold else FontWeight.Normal,
+                )
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+
         OutlinedTextField(
             value = label, onValueChange = { label = it },
             label = { Text("Nom (optionnel)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = url, onValueChange = { url = it },
-            label = { Text("URL du serveur") }, placeholder = { Text("http://monserveur.com") },
-            singleLine = true, modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = username, onValueChange = { username = it },
-            label = { Text("Nom d'utilisateur") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = password, onValueChange = { password = it },
-            label = { Text("Mot de passe") }, singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            modifier = Modifier.fillMaxWidth(),
-        )
+
+        if (isM3uMode) {
+            OutlinedTextField(
+                value = m3uLink, onValueChange = { m3uLink = it },
+                label = { Text("Lien M3U") }, placeholder = { Text("http://monserveur.com/get.php?...") },
+                singleLine = true, modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            OutlinedTextField(
+                value = url, onValueChange = { url = it },
+                label = { Text("URL du serveur") }, placeholder = { Text("http://monserveur.com") },
+                singleLine = true, modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = username, onValueChange = { username = it },
+                label = { Text("Nom d'utilisateur") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = password, onValueChange = { password = it },
+                label = { Text("Mot de passe") }, singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
         error?.let {
             Spacer(Modifier.height(8.dp))
             Text(it, color = MaterialTheme.colorScheme.error, fontSize = MaterialTheme.typography.bodySmall.fontSize)
@@ -461,15 +503,26 @@ private fun AddPlaylistForm(onCancel: () -> Unit, onSaved: () -> Unit) {
                     saving = true
                     scope.launch {
                         runCatching {
-                            val creds = XtreamCredentials(url, username, password)
-                            val info = XtreamClient.create(creds.url).getAccountInfo(creds.username, creds.password)
-                            if (info.userInfo?.auth != 1) throw InvalidPlaylistCredentialsException()
-                            val finalLabel = label.ifBlank { "$username — ${url.substringAfter("//")}" }
-                            PlaylistsStore.upsert(context, finalLabel, creds)
-                            onSaved()
+                            if (isM3uMode) {
+                                val creds = m3uCredentials(m3uLink)
+                                val catalog = M3uParser.fetchAndParse(m3uLink)
+                                if (catalog.liveChannels.isEmpty() && catalog.movies.isEmpty() && catalog.series.isEmpty()) {
+                                    throw InvalidPlaylistCredentialsException()
+                                }
+                                val finalLabel = label.ifBlank { "Playlist M3U" }
+                                PlaylistsStore.upsert(context, finalLabel, creds)
+                                onSaved()
+                            } else {
+                                val creds = XtreamCredentials(url, username, password)
+                                val info = XtreamClient.create(creds.url).getAccountInfo(creds.username, creds.password)
+                                if (info.userInfo?.auth != 1) throw InvalidPlaylistCredentialsException()
+                                val finalLabel = label.ifBlank { "$username — ${url.substringAfter("//")}" }
+                                PlaylistsStore.upsert(context, finalLabel, creds)
+                                onSaved()
+                            }
                         }.onFailure {
                             error = if (it is InvalidPlaylistCredentialsException) {
-                                "Identifiants incorrects. Vérifie l'URL, le nom d'utilisateur et le mot de passe."
+                                if (isM3uMode) "Lien M3U invalide ou vide." else "Identifiants incorrects. Vérifie l'URL, le nom d'utilisateur et le mot de passe."
                             } else {
                                 "Impossible de joindre le serveur.\n(${it.message})"
                             }

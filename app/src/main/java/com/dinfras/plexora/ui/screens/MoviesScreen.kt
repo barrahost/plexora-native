@@ -84,13 +84,23 @@ fun MoviesScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
         // (CatalogDownloadScreen) : on ne relance l'appel reseau ici que
         // s'il n'y a rien en cache, ou que le cache a plus de 24h.
         if (!haveData || stale) {
-            runCatching {
-                val newCategories = service.getVodCategories(creds.username, creds.password)
-                val newMovies = service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
-                categories = newCategories
-                movies = newMovies
-                CatalogCache.setMovies(screenContext, CatalogCache.MovieData(newCategories, newMovies))
-            }.onFailure { if (!haveData) error = friendlyNetworkError(it) }
+            if (creds.isM3u()) {
+                val catalog = M3uCatalogSync.refreshAll(screenContext, creds)
+                if (catalog != null) {
+                    categories = catalog.movieCategories
+                    movies = catalog.movies
+                } else if (!haveData) {
+                    error = "Impossible de récupérer la playlist M3U."
+                }
+            } else {
+                runCatching {
+                    val newCategories = service.getVodCategories(creds.username, creds.password)
+                    val newMovies = service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
+                    categories = newCategories
+                    movies = newMovies
+                    CatalogCache.setMovies(screenContext, CatalogCache.MovieData(newCategories, newMovies))
+                }.onFailure { if (!haveData) error = friendlyNetworkError(it) }
+            }
         }
         loading = false
     }
@@ -269,7 +279,7 @@ fun MovieDetail(creds: XtreamCredentials, service: XtreamService, movie: XtreamM
     }
 
     val streamUrl = remember(movie) {
-        XtreamClient.vodStreamUrl(creds.url, creds.username, creds.password, movie.streamId, movie.containerExtension ?: "mp4")
+        movie.directUrl ?: XtreamClient.vodStreamUrl(creds.url, creds.username, creds.password, movie.streamId, movie.containerExtension ?: "mp4")
     }
 
     // Publie dans FullscreenHost (rendu hors marge overscan, au niveau

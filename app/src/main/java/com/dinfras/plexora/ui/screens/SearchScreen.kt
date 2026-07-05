@@ -61,22 +61,34 @@ fun SearchScreen(creds: XtreamCredentials) {
         if (ser != null) series = ser.series
 
         if (!haveAll) {
-            runCatching {
-                val newCategories = live?.categories ?: service.getLiveCategories(creds.username, creds.password)
-                val newChannels = live?.channels ?: service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
-                val newMovies = vod?.movies ?: service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
-                val newSeries = ser?.series ?: service.getSeriesList(creds.username, creds.password).filter { it.seriesId > 0 }
-                categories = newCategories
-                channels = newChannels
-                movies = newMovies
-                series = newSeries
-                if (live == null) CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
-                if (vod == null) CatalogCache.setMovies(context, CatalogCache.MovieData(service.getVodCategories(creds.username, creds.password), newMovies))
-                if (ser == null) CatalogCache.setSeries(context, CatalogCache.SeriesData(service.getSeriesCategories(creds.username, creds.password), newSeries))
-            }.onFailure {
-                // N'affiche l'erreur que si on n'a vraiment rien a chercher —
-                // avec un cache partiel, la recherche reste utilisable.
-                if (channels.isEmpty() && movies.isEmpty() && series.isEmpty()) error = friendlyNetworkError(it)
+            if (creds.isM3u()) {
+                val catalog = M3uCatalogSync.refreshAll(context, creds)
+                if (catalog != null) {
+                    categories = catalog.liveCategories
+                    channels = catalog.liveChannels
+                    movies = catalog.movies
+                    series = catalog.series
+                } else if (channels.isEmpty() && movies.isEmpty() && series.isEmpty()) {
+                    error = "Impossible de récupérer la playlist M3U."
+                }
+            } else {
+                runCatching {
+                    val newCategories = live?.categories ?: service.getLiveCategories(creds.username, creds.password)
+                    val newChannels = live?.channels ?: service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
+                    val newMovies = vod?.movies ?: service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
+                    val newSeries = ser?.series ?: service.getSeriesList(creds.username, creds.password).filter { it.seriesId > 0 }
+                    categories = newCategories
+                    channels = newChannels
+                    movies = newMovies
+                    series = newSeries
+                    if (live == null) CatalogCache.setLive(context, CatalogCache.LiveData(newCategories, newChannels))
+                    if (vod == null) CatalogCache.setMovies(context, CatalogCache.MovieData(service.getVodCategories(creds.username, creds.password), newMovies))
+                    if (ser == null) CatalogCache.setSeries(context, CatalogCache.SeriesData(service.getSeriesCategories(creds.username, creds.password), newSeries))
+                }.onFailure {
+                    // N'affiche l'erreur que si on n'a vraiment rien a chercher —
+                    // avec un cache partiel, la recherche reste utilisable.
+                    if (channels.isEmpty() && movies.isEmpty() && series.isEmpty()) error = friendlyNetworkError(it)
+                }
             }
         }
         loading = false

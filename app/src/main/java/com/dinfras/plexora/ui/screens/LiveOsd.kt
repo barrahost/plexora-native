@@ -104,7 +104,7 @@ fun LiveFullscreenPlayer(
     }
 
     val url = remember(channel) {
-        XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, channel.streamId)
+        channel.directUrl ?: XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, channel.streamId)
     }
 
     // Retour : ferme le guide (et quitte le plein ecran), sinon masque

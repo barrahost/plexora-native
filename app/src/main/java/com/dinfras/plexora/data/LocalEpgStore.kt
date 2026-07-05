@@ -68,20 +68,31 @@ object LocalEpgStore {
         runCatching {
             val base = creds.url.trim().trimEnd('/').let { if (!it.startsWith("http")) "http://$it" else it }
             val url = "$base/xmltv.php?username=${creds.username}&password=${creds.password}"
-            val client = XtreamClient.http.newBuilder()
-                .readTimeout(60, TimeUnit.SECONDS)
-                .build()
-            val request = Request.Builder().url(url).build()
-            client.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) return@withContext false
-                val body = resp.body?.string() ?: return@withContext false
-                val parsed = parseXmltv(body)
-                if (parsed.isEmpty()) return@withContext false
-                cache = parsed
-                runCatching { File(context.filesDir, FILE_NAME).writeText(adapter.toJson(parsed)) }
-                true
-            }
+            downloadAndStore(context, url)
         }.getOrDefault(false)
+    }
+
+    // Variante pour les playlists M3U : le guide XMLTV n'est pas a une URL
+    // fixe deduite des identifiants, mais donne directement par l'attribut
+    // url-tvg de l'en-tete M3U (recupere par M3uParser).
+    suspend fun refreshFromUrl(context: Context, xmltvUrl: String): Boolean = withContext(Dispatchers.IO) {
+        runCatching { downloadAndStore(context, xmltvUrl) }.getOrDefault(false)
+    }
+
+    private fun downloadAndStore(context: Context, url: String): Boolean {
+        val client = XtreamClient.http.newBuilder()
+            .readTimeout(60, TimeUnit.SECONDS)
+            .build()
+        val request = Request.Builder().url(url).build()
+        client.newCall(request).execute().use { resp ->
+            if (!resp.isSuccessful) return false
+            val body = resp.body?.string() ?: return false
+            val parsed = parseXmltv(body)
+            if (parsed.isEmpty()) return false
+            cache = parsed
+            runCatching { File(context.filesDir, FILE_NAME).writeText(adapter.toJson(parsed)) }
+            return true
+        }
     }
 
     private fun parseXmltv(xml: String): Map<String, List<EpgItem>> {
@@ -154,6 +165,17 @@ object LocalEpgStore {
         refreshState = RefreshState.RUNNING
         storeScope.launch {
             val ok = refresh(context, creds)
+            refreshState = if (ok) RefreshState.DONE else RefreshState.IDLE
+        }
+    }
+
+    // Pour une playlist M3U : xmltvUrl vient de l'attribut url-tvg de l'en-tete
+    // M3U (peut etre absent si le fournisseur ne le renseigne pas).
+    fun refreshOnceIfNeededFromUrl(context: Context, xmltvUrl: String?) {
+        if (xmltvUrl.isNullOrBlank() || refreshState != RefreshState.IDLE) return
+        refreshState = RefreshState.RUNNING
+        storeScope.launch {
+            val ok = refreshFromUrl(context, xmltvUrl)
             refreshState = if (ok) RefreshState.DONE else RefreshState.IDLE
         }
     }

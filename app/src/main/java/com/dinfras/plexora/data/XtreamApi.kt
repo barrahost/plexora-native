@@ -102,6 +102,9 @@ suspend fun XtreamService.getShortEpgThrottled(username: String, password: Strin
 // ou telechargement XMLTV pas encore termine/disponible sur ce serveur).
 suspend fun XtreamService.getEpgForChannel(username: String, password: String, channel: XtreamChannel): List<EpgItem> {
     LocalEpgStore.programsFor(channel.epgChannelId)?.let { if (it.isNotEmpty()) return it }
+    // Une chaine M3U (directUrl non nul) n'a pas d'API get_short_epg a interroger —
+    // seul le XMLTV local (deja consulte ci-dessus) peut fournir son programme.
+    if (channel.directUrl != null) return emptyList()
     return runCatching { getShortEpgThrottled(username, password, channel.streamId).epgListings ?: emptyList() }.getOrDefault(emptyList())
 }
 

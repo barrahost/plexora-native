@@ -31,10 +31,12 @@ object SupabaseConfig {
 
 @com.squareup.moshi.JsonClass(generateAdapter = true)
 data class ProvisionedPlaylist(
-    @com.squareup.moshi.Json(name = "server_url") val serverUrl: String,
-    val username: String,
-    val password: String,
+    @com.squareup.moshi.Json(name = "server_url") val serverUrl: String?,
+    val username: String?,
+    val password: String?,
     val label: String?,
+    val type: String = "xtream",
+    @com.squareup.moshi.Json(name = "m3u_link") val m3uLink: String?,
 )
 
 object DeviceProvisioningClient {

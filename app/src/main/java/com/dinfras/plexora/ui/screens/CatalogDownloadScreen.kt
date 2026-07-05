@@ -53,6 +53,29 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
     val progress by animateFloatAsState(stepsDone / 4f, animationSpec = tween(400), label = "catalogProgress")
 
     LaunchedEffect(creds, attempt) {
+        if (creds.isM3u()) {
+            // Une playlist M3U se recupere en un seul fichier (TV+Films+Series
+            // d'un coup) : pas d'etapes separees possibles comme pour Xtream,
+            // mais on affiche quand meme la progression une fois le resultat connu.
+            val catalog = M3uCatalogSync.refreshAll(context, creds)
+            if (catalog == null) {
+                error = "Impossible de récupérer la playlist M3U."
+                blocked = true
+                return@LaunchedEffect
+            }
+            val radioCatIds = catalog.liveCategories.filter { it.categoryName.contains("radio", ignoreCase = true) }.map { it.categoryId }.toSet()
+            liveCount = catalog.liveChannels.count { it.categoryId !in radioCatIds }
+            radioCount = catalog.liveChannels.count { it.categoryId in radioCatIds }
+            stepsDone = 1
+            movieCount = catalog.movies.size
+            stepsDone = 2
+            seriesCount = catalog.series.size
+            stepsDone = 3
+            stepsDone = 4
+            onComplete()
+            return@LaunchedEffect
+        }
+
         runCatching {
             val liveCats = service.getLiveCategories(creds.username, creds.password)
             val liveChannels = service.getLiveStreams(creds.username, creds.password).filter { it.streamId > 0 }
