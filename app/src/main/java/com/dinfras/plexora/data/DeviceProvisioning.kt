@@ -22,34 +22,35 @@ fun getDeviceId(context: Context): String {
 }
 
 // À renseigner une fois le projet Supabase créé (URL du projet + clé anon,
-// jamais la clé service_role côté client). Voir supabase/schema.sql pour la
-// table "devices" attendue.
+// jamais la clé service_role côté client). Voir supabase/schema.sql +
+// migration_admin.sql + migration_multi_playlists.sql (repo plexora-web).
 object SupabaseConfig {
     const val URL = "https://cnsgyoirnhkjmklmzklh.supabase.co"
     const val ANON_KEY = "sb_publishable_SUTpOhDg71DlUWfgvGErDQ_dBKUJLJy"
 }
 
 @com.squareup.moshi.JsonClass(generateAdapter = true)
-private data class PlaylistLookupRow(
+data class ProvisionedPlaylist(
     @com.squareup.moshi.Json(name = "server_url") val serverUrl: String,
     val username: String,
     val password: String,
+    val label: String?,
 )
 
 object DeviceProvisioningClient {
-    private val listType = Types.newParameterizedType(List::class.java, PlaylistLookupRow::class.java)
-    private val adapter = MoshiProvider.instance.adapter<List<PlaylistLookupRow>>(listType)
+    private val listType = Types.newParameterizedType(List::class.java, ProvisionedPlaylist::class.java)
+    private val adapter = MoshiProvider.instance.adapter<List<ProvisionedPlaylist>>(listType)
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(8, TimeUnit.SECONDS)
         .build()
 
-    // Appelle la fonction Postgres get_device_playlist (RPC), qui ne renvoie
-    // jamais qu'UNE ligne pour le device_id demandé — impossible de lister
-    // tous les clients (pas d'accès direct à la table via l'API REST).
-    suspend fun lookup(deviceId: String): XtreamCredentials? {
-        if (SupabaseConfig.URL.isBlank()) return null
+    // Comme HotPlayer, un appareil peut avoir plusieurs playlists associees —
+    // la fonction Postgres get_device_playlist renvoie desormais toutes les
+    // playlists actives du device_id demande (pas une seule ligne).
+    suspend fun lookup(deviceId: String): List<ProvisionedPlaylist> {
+        if (SupabaseConfig.URL.isBlank()) return emptyList()
         val url = "${SupabaseConfig.URL}/rest/v1/rpc/get_device_playlist"
         val json = """{"p_device_id":"${deviceId.replace("\"", "")}"}"""
         val request = Request.Builder()
@@ -61,11 +62,10 @@ object DeviceProvisioningClient {
             .build()
         return runCatching {
             http.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) return@runCatching null
-                val body = resp.body?.string() ?: return@runCatching null
-                val list = adapter.fromJson(body) ?: return@runCatching null
-                list.firstOrNull()?.let { XtreamCredentials(it.serverUrl, it.username, it.password) }
+                if (!resp.isSuccessful) return@runCatching emptyList()
+                val body = resp.body?.string() ?: return@runCatching emptyList()
+                adapter.fromJson(body) ?: emptyList()
             }
-        }.getOrNull()
+        }.getOrDefault(emptyList())
     }
 }

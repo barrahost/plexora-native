@@ -47,9 +47,19 @@ fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
             return@LaunchedEffect
         }
         val provisioned = DeviceProvisioningClient.lookup(deviceId)
-        if (provisioned != null) {
-            CredentialsStore.save(context, provisioned)
-            onLoggedIn(provisioned)
+        if (provisioned.isNotEmpty()) {
+            // Comme HotPlayer, un appareil peut avoir plusieurs playlists
+            // associees : on les importe toutes dans PlaylistsStore (deja
+            // utilise par Parametres > Listes de lecture pour switcher entre
+            // comptes), la premiere devenant la playlist active au demarrage.
+            provisioned.forEachIndexed { index, p ->
+                val creds = XtreamCredentials(p.serverUrl, p.username, p.password)
+                val label = p.label?.takeIf { it.isNotBlank() } ?: "Playlist ${index + 1}"
+                PlaylistsStore.upsert(context, label, creds)
+            }
+            val active = XtreamCredentials(provisioned[0].serverUrl, provisioned[0].username, provisioned[0].password)
+            CredentialsStore.save(context, active)
+            onLoggedIn(active)
         } else {
             state = LoginState.Manual
         }
