@@ -254,7 +254,7 @@ private fun QuickBar(
 ) {
     var epg by remember(activeChannel) { mutableStateOf<List<EpgItem>>(emptyList()) }
     LaunchedEffect(activeChannel) {
-        epg = service.getEpgForChannel(creds.username, creds.password, activeChannel)
+        epg = service.getEpgForChannel(creds.username, creds.password, activeChannel, channels)
     }
     val nowIndex = epg.indexOfFirst { it.nowPlaying == 1 }
     val now = epg.getOrNull(nowIndex) ?: epg.firstOrNull()
@@ -456,7 +456,7 @@ private fun ChannelSwitcherPanel(
 ) {
     var epg by remember(activeChannel) { mutableStateOf<List<EpgItem>>(emptyList()) }
     LaunchedEffect(activeChannel) {
-        epg = service.getEpgForChannel(creds.username, creds.password, activeChannel)
+        epg = service.getEpgForChannel(creds.username, creds.password, activeChannel, channels)
     }
     val now = epg.firstOrNull { it.nowPlaying == 1 } ?: epg.firstOrNull()
 
@@ -613,7 +613,7 @@ private fun EpgGridOverlay(
     var focused by remember { mutableStateOf(activeChannel) }
     var focusedEpg by remember { mutableStateOf<List<EpgItem>>(emptyList()) }
     LaunchedEffect(focused) {
-        focusedEpg = service.getEpgForChannel(creds.username, creds.password, focused)
+        focusedEpg = service.getEpgForChannel(creds.username, creds.password, focused, channels)
     }
     val now = focusedEpg.firstOrNull { it.nowPlaying == 1 } ?: focusedEpg.firstOrNull()
     val windowStart = remember { (now?.startTimestamp ?: (System.currentTimeMillis() / 1000)) }

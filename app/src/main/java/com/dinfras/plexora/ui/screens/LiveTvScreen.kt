@@ -184,7 +184,7 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                 val channel = activeChannel
                 var epg by remember(channel) { mutableStateOf<List<EpgItem>>(emptyList()) }
                 LaunchedEffect(channel) {
-                    epg = if (channel == null) emptyList() else service.getEpgForChannel(creds.username, creds.password, channel)
+                    epg = if (channel == null) emptyList() else service.getEpgForChannel(creds.username, creds.password, channel, channels)
                 }
 
                 Box(Modifier.height(200.dp).fillMaxWidth().background(Color.Black)) {
