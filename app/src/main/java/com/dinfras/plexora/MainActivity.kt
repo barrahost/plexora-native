@@ -163,10 +163,13 @@ private fun AppContent() {
     var catalogReady by remember(current) { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(current) {
         if (current == null) return@LaunchedEffect
-        val hasLive = com.dinfras.plexora.data.CatalogCache.getLive() != null || com.dinfras.plexora.data.CatalogCache.loadLiveFromDisk(context) != null
-        val hasMovies = com.dinfras.plexora.data.CatalogCache.getMovies() != null || com.dinfras.plexora.data.CatalogCache.loadMoviesFromDisk(context) != null
-        val hasSeries = com.dinfras.plexora.data.CatalogCache.getSeries() != null || com.dinfras.plexora.data.CatalogCache.loadSeriesFromDisk(context) != null
-        catalogReady = hasLive && hasMovies && hasSeries
+        // Precharge ce qui est disponible en cache (peu importe si Films/Series
+        // manquent — voir CatalogCache.isOnboarded pour pourquoi ce n'est plus
+        // une condition bloquante).
+        com.dinfras.plexora.data.CatalogCache.loadLiveFromDisk(context)
+        com.dinfras.plexora.data.CatalogCache.loadMoviesFromDisk(context)
+        com.dinfras.plexora.data.CatalogCache.loadSeriesFromDisk(context)
+        catalogReady = com.dinfras.plexora.data.CatalogCache.isOnboarded(context)
     }
 
     if (current == null) {

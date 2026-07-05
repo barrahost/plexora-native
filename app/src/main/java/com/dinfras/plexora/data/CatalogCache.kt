@@ -80,7 +80,31 @@ object CatalogCache {
         live = null
         movies = null
         series = null
-        listOf(FILE_LIVE, FILE_MOVIES, FILE_SERIES).forEach { File(context.filesDir, it).delete() }
+        onboarded = false
+        listOf(FILE_LIVE, FILE_MOVIES, FILE_SERIES, FILE_ONBOARDED).forEach { File(context.filesDir, it).delete() }
+    }
+
+    private const val FILE_ONBOARDED = "catalog_onboarded"
+
+    // Certains comptes n'ont legitimement pas de Films/Series (panel TV
+    // uniquement) ou peuvent echouer une fois sur l'un des trois catalogues
+    // sans que ce soit bloquant (CatalogDownloadScreen tolere deja ce cas).
+    // Exiger que les TROIS soient en cache pour ne pas remontrer l'ecran de
+    // telechargement etait donc trop strict : un compte sans Films par
+    // exemple revoyait cet ecran a CHAQUE lancement, indefiniment. On retient
+    // plutot explicitement qu'on est deja passe une fois par cet ecran.
+    @Volatile private var onboarded: Boolean? = null
+
+    suspend fun isOnboarded(context: Context): Boolean {
+        onboarded?.let { return it }
+        val done = withContext(Dispatchers.IO) { File(context.filesDir, FILE_ONBOARDED).exists() }
+        onboarded = done
+        return done
+    }
+
+    suspend fun markOnboarded(context: Context) {
+        onboarded = true
+        withContext(Dispatchers.IO) { runCatching { File(context.filesDir, FILE_ONBOARDED).writeText("1") } }
     }
 
     private suspend fun writeToDisk(context: Context, fileName: String, json: String) = withContext(Dispatchers.IO) {

@@ -71,6 +71,7 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
             stepsDone = 2
             seriesCount = catalog.series.size
             stepsDone = 3
+            CatalogCache.markOnboarded(context)
             stepsDone = 4
             onComplete()
             return@LaunchedEffect
@@ -113,6 +114,7 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
         // ne pas etre annule quand on entre dans l'appli juste apres.
         LocalEpgStore.loadFromDisk(context)
         LocalEpgStore.refreshOnceIfNeeded(context, creds)
+        CatalogCache.markOnboarded(context)
         stepsDone = 4
 
         onComplete()

@@ -82,7 +82,13 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
         }
         if (PlayerPrefs.getResumeLastChannel(context)) {
             val lastId = PlayerPrefs.getLastChannelId(context)
-            if (lastId != null) activeChannel = channels.firstOrNull { it.streamId == lastId }
+            val resumed = lastId?.let { id -> channels.firstOrNull { it.streamId == id } }
+            if (resumed != null) {
+                activeChannel = resumed
+                // Reprend directement en plein ecran, pas juste en apercu —
+                // comme TiviMate au demarrage.
+                fullscreen = true
+            }
         }
         loading = false
     }

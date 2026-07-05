@@ -61,7 +61,12 @@ private data class PlayerSettings(
 
 @UnstableApi
 @Composable
-fun LiveVideoPlayer(streamUrl: String, modifier: Modifier = Modifier, showLoadingIndicator: Boolean = true) {
+fun LiveVideoPlayer(
+    streamUrl: String,
+    modifier: Modifier = Modifier,
+    showLoadingIndicator: Boolean = true,
+    onPlayerReady: (ExoPlayer) -> Unit = {},
+) {
     val context = LocalContext.current
     val settings by produceState(initialValue = PlayerSettings(BufferMode.MEDIUM, DecoderMode.AUTO, DecoderMode.AUTO, false)) {
         value = PlayerSettings(
@@ -118,6 +123,7 @@ fun LiveVideoPlayer(streamUrl: String, modifier: Modifier = Modifier, showLoadin
     DisposableEffect(exoPlayer) {
         onDispose { exoPlayer.release() }
     }
+    LaunchedEffect(exoPlayer) { onPlayerReady(exoPlayer) }
 
     Box(modifier) {
         AndroidView(
@@ -125,6 +131,12 @@ fun LiveVideoPlayer(streamUrl: String, modifier: Modifier = Modifier, showLoadin
             factory = {
                 PlayerView(it).apply {
                     useController = false
+                    // Sans ca, cette vue (focusable par defaut) vole le focus
+                    // Android au conteneur Compose qui ecoute les touches D-pad
+                    // (OK, fleches) : aucune incrustation/controle ne pouvait
+                    // alors jamais s'ouvrir, meme en plein ecran normal.
+                    isFocusable = false
+                    isFocusableInTouchMode = false
                 }
             },
             // Sans ce bloc, la vue garde le tout premier lecteur ExoPlayer
