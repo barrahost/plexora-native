@@ -504,10 +504,12 @@ private fun AddPlaylistForm(onCancel: () -> Unit, onSaved: () -> Unit) {
                     scope.launch {
                         runCatching {
                             if (isM3uMode) {
-                                val creds = m3uCredentials(m3uLink)
-                                val catalog = M3uParser.fetchAndParse(m3uLink)
-                                if (catalog.liveChannels.isEmpty() && catalog.movies.isEmpty() && catalog.series.isEmpty()) {
-                                    throw InvalidPlaylistCredentialsException()
+                                val creds = resolveM3uOrXtream(m3uLink)
+                                if (creds.isM3u()) {
+                                    val catalog = M3uParser.fetchAndParse(m3uLink)
+                                    if (catalog.liveChannels.isEmpty() && catalog.movies.isEmpty() && catalog.series.isEmpty()) {
+                                        throw InvalidPlaylistCredentialsException()
+                                    }
                                 }
                                 val finalLabel = label.ifBlank { "Playlist M3U" }
                                 PlaylistsStore.upsert(context, finalLabel, creds)

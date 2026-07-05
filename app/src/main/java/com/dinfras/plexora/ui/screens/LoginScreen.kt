@@ -62,7 +62,9 @@ fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
             // pour switcher entre comptes), la premiere devenant active.
             val importedCreds = provisioned.mapIndexedNotNull { index, p ->
                 val creds = if (p.type == "m3u") {
-                    p.m3uLink?.let { m3uCredentials(it) }
+                    // Detecte au passage si ce lien M3U est en realite un compte
+                    // Xtream complet (get.php?username=...&password=...).
+                    p.m3uLink?.let { resolveM3uOrXtream(it) }
                 } else {
                     if (p.serverUrl != null && p.username != null && p.password != null) {
                         XtreamCredentials(p.serverUrl, p.username, p.password)
@@ -159,10 +161,15 @@ fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
                         scope.launch {
                             runCatching {
                                 if (isM3uMode) {
-                                    val creds = m3uCredentials(m3uLink)
-                                    val catalog = M3uParser.fetchAndParse(m3uLink)
-                                    if (catalog.liveChannels.isEmpty() && catalog.movies.isEmpty() && catalog.series.isEmpty()) {
-                                        throw InvalidCredentialsException()
+                                    // Beaucoup de liens M3U de revendeurs Xtream sont en fait
+                                    // un compte complet deguise (get.php?username=...&password=...) :
+                                    // on en profite pour avoir l'API complete si c'est le cas.
+                                    val creds = resolveM3uOrXtream(m3uLink)
+                                    if (creds.isM3u()) {
+                                        val catalog = M3uParser.fetchAndParse(m3uLink)
+                                        if (catalog.liveChannels.isEmpty() && catalog.movies.isEmpty() && catalog.series.isEmpty()) {
+                                            throw InvalidCredentialsException()
+                                        }
                                     }
                                     CredentialsStore.save(context, creds)
                                     onLoggedIn(creds)
