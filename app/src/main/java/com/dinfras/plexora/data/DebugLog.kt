@@ -112,6 +112,9 @@ object DebugLog {
         val bypassCount = sinceEntry.count { it.contains("bypass: handler=true") }
         val bypassNullCount = sinceEntry.count { it.contains("bypass: handler=false") }
         val exceptionCount = sinceEntry.count { it.contains("bypass EXCEPTION") }
+        val composeCount = sinceEntry.count { it.contains("LiveFullscreenPlayer compose") }
+        val registerCount = sinceEntry.count { it.contains("keyHandler REGISTER") }
+        val unregisterCount = sinceEntry.count { it.contains("keyHandler UNREGISTER") }
         val lastFocus = sinceEntry.lastOrNull { it.contains("onFocusChanged") }
             ?.substringAfter("isFocused=")
         val diagnosis = if (lastComposeIdx >= 0) {
@@ -120,7 +123,10 @@ object DebugLog {
                 "  - touches recues par le lecteur plein ecran (onKeyEvent) : $onKeyCount\n" +
                 "  - dernier focus connu du lecteur : ${lastFocus ?: "inconnu"}\n" +
                 "  - repli Activite: handler present=$bypassCount absent=$bypassNullCount exceptions=$exceptionCount\n" +
-                (if (dispatchCount > 0 && onKeyCount == 0) {
+                "  - recompositions (compose)=$composeCount register=$registerCount unregister=$unregisterCount\n" +
+                (if (composeCount > 3 || unregisterCount > 2) {
+                    "  -> Boucle de recomposition suspectee (le lecteur plein ecran est detruit/recree en continu).\n"
+                } else if (dispatchCount > 0 && onKeyCount == 0) {
                     "  -> Android recoit bien les touches mais le lecteur plein ecran ne les recoit JAMAIS : le focus est ailleurs (cache derriere l'ecran noir), pas un vrai gel.\n"
                 } else "") +
                 "\n"

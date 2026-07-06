@@ -243,8 +243,12 @@ fun LiveFullscreenPlayer(
     // handler nul. Les vars qu'elle capture (showQuickBar, osdStage...) sont
     // de toute facon relues a jour a chaque appel, cle Unit ou non.
     DisposableEffect(Unit) {
+        com.dinfras.plexora.data.DebugLog.event("keyHandler REGISTER")
         FullscreenKeyHandler.handler = keyHandler
-        onDispose { FullscreenKeyHandler.handler = null }
+        onDispose {
+            com.dinfras.plexora.data.DebugLog.event("keyHandler UNREGISTER (dispose)")
+            FullscreenKeyHandler.handler = null
+        }
     }
     SideEffect { FullscreenKeyHandler.handler = keyHandler }
 
