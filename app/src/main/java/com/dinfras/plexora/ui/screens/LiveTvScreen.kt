@@ -135,11 +135,7 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
     }
 
     if (loading) {
-        // Pas de spinner visible ici : le but est une reprise directe et
-        // silencieuse de la derniere chaine, sans indicateur de chargement a
-        // l'ecran — juste un court fond neutre (quasi imperceptible) pendant
-        // le bref delai de stabilisation, puis la video plein ecran.
-        Box(Modifier.fillMaxSize().background(Color.Black))
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
     if (error != null) {
