@@ -128,8 +128,11 @@ object DebugLog {
         val unregisterCount = sinceEntry.count { it.contains("keyHandler UNREGISTER") }
         val lastFocus = sinceEntry.lastOrNull { it.contains("onFocusChanged") }
             ?.substringAfter("isFocused=")
+        val lastCheckpoint = sinceEntry.lastOrNull { it.contains("checkpoint ") }
+            ?.substringAfter("checkpoint ")
         val diagnosis = if (lastComposeIdx >= 0) {
             "Depuis la derniere entree en plein ecran :\n" +
+                "  - dernier checkpoint atteint : ${lastCheckpoint ?: "AUCUN (bloque avant meme le 1er checkpoint !)"}\n" +
                 "  - touches recues par Android (dispatchKeyEvent) : $dispatchCount\n" +
                 "  - touches recues par le lecteur plein ecran (onKeyEvent) : $onKeyCount\n" +
                 "  - dernier focus connu du lecteur : ${lastFocus ?: "inconnu"}\n" +

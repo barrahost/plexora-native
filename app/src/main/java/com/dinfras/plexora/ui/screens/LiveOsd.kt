@@ -84,6 +84,7 @@ fun LiveFullscreenPlayer(
     val focusRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
     val history = remember { mutableStateListOf<XtreamChannel>() }
+    com.dinfras.plexora.data.DebugLog.event("checkpoint A: vars init done")
 
     LaunchedEffect(channel) {
         history.removeAll { it.streamId == channel.streamId }
@@ -139,9 +140,11 @@ fun LiveFullscreenPlayer(
         }
     }
 
+    com.dinfras.plexora.data.DebugLog.event("checkpoint B: before url compute")
     val url = remember(channel) {
         channel.directUrl ?: XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, channel.streamId)
     }
+    com.dinfras.plexora.data.DebugLog.event("checkpoint C: url computed")
 
     // Retour : ferme le guide (et quitte le plein ecran), sinon masque
     // l'incrustation ou la barre rapide, sinon ouvre le guide TV.
@@ -149,9 +152,11 @@ fun LiveFullscreenPlayer(
     BackHandler(enabled = !showGrid && osdStage > 0) { osdStage = 0 }
     BackHandler(enabled = !showGrid && osdStage == 0 && showQuickBar) { showQuickBar = false }
     BackHandler(enabled = !showGrid && osdStage == 0 && !showQuickBar) { showGrid = true }
+    com.dinfras.plexora.data.DebugLog.event("checkpoint D: BackHandlers done")
 
     var okDownJob by remember { mutableStateOf<Job?>(null) }
     var okWasLongPress by remember { mutableStateOf(false) }
+    com.dinfras.plexora.data.DebugLog.event("checkpoint E: before keyHandler def")
 
     // Extrait en fonction nommee (plutot qu'une lambda inline sur .onKeyEvent)
     // pour pouvoir aussi la brancher en repli au niveau de l'Activite : le
@@ -235,6 +240,7 @@ fun LiveFullscreenPlayer(
                     false
                 }
     }
+    com.dinfras.plexora.data.DebugLog.event("checkpoint F: keyHandler defined")
 
     // Cle Unit (pas keyHandler) : la lambda est un nouvel objet a chaque
     // recomposition (frequente : showQuickBar, osdStage...) — avec la lambda
