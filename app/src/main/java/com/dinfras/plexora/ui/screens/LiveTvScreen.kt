@@ -198,11 +198,15 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
 
             LazyColumn(Modifier.width(280.dp).fillMaxHeight().background(Color(0xFF0B0F19).copy(alpha = AppUiState.overlayAlpha.floatValue))) {
                 itemsIndexed(filteredChannels) { idx, ch ->
-                    // Selectionner une chaine demarre directement la lecture en
-                    // plein ecran, sans etape intermediaire d'apercu — comme TiviMate.
+                    // 1er clic : selectionne la chaine, affiche l'apercu + EPG
+                    // (colonne 3) sans passer en plein ecran. 2e clic sur la
+                    // meme chaine (deja active) : lance le plein ecran.
                     ChannelRow(idx, ch, activeChannel?.streamId == ch.streamId, creds, service) {
-                        activeChannel = ch
-                        fullscreen = true
+                        if (activeChannel?.streamId == ch.streamId) {
+                            fullscreen = true
+                        } else {
+                            activeChannel = ch
+                        }
                     }
                 }
             }
