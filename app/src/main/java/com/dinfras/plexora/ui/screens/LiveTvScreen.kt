@@ -36,9 +36,12 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
     var selectedCat by remember { mutableStateOf<String?>(null) }
     var activeChannel by remember { mutableStateOf<XtreamChannel?>(null) }
     var fullscreen by remember { mutableStateOf(false) }
-    // Deja en cache (memoire ou disque) : on affiche instantanement, pas
-    // d'ecran de chargement — comme TiviMate. Sinon, chargement classique.
-    var loading by remember { mutableStateOf(memCached == null) }
+    // Toujours vrai au depart, meme si le catalogue est deja en cache : tant
+    // qu'on n'a pas verifie s'il faut reprendre la derniere chaine, afficher
+    // le menu (meme brievement) puis basculer en plein ecran donnait un
+    // flash visible du menu avant la lecture. Le spinner reste donc affiche
+    // jusqu'a ce que cette decision soit prise (voir plus bas).
+    var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -50,7 +53,6 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
             CatalogCache.loadLiveFromDisk(context)?.let {
                 categories = it.categories
                 channels = it.channels
-                loading = false
                 haveData = true
                 stale = CatalogCache.isStale(it.fetchedAt)
             }
