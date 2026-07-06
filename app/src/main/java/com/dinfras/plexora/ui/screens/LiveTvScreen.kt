@@ -86,7 +86,15 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
             if (resumed != null) {
                 activeChannel = resumed
                 // Reprend directement en plein ecran, pas juste en apercu —
-                // comme TiviMate au demarrage.
+                // comme TiviMate au demarrage. Court delai avant d'entrer en
+                // plein ecran : au tout premier lancement (a froid), la fenetre
+                // de l'Activity n'est pas encore totalement prete a l'affichage
+                // (edge-to-edge, insets...) — initialiser ExoPlayer/la surface
+                // video trop tot dans cette fenetre produisait un ecran noir
+                // (audio seul) et un blocage complet de l'appli. Le zapping
+                // manuel (fenetre deja stable) n'est pas concerne, donc pas de
+                // delai ajoute la-bas.
+                kotlinx.coroutines.delay(600)
                 fullscreen = true
             }
         }
