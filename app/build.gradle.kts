@@ -17,8 +17,8 @@ android {
         // dessus, faisant echouer silencieusement les mises a jour via
         // Downloader sur les TV qui avaient encore l'ancienne app. Doit
         // rester superieur a 7 et etre incremente a chaque APK publie.
-        versionCode = 29
-        versionName = "2.21"
+        versionCode = 30
+        versionName = "2.22"
     }
 
     buildTypes {

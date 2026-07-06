@@ -97,11 +97,36 @@ object DebugLog {
         } else {
             "Aucun écart notable entre les battements (aucun gel detecté).\n"
         }
+
+        // Diagnostic cible : depuis la derniere entree en plein ecran, compare
+        // le nombre de touches recues par Android (dispatchKeyEvent, au niveau
+        // de l'Activite) a celles qui atteignent reellement le lecteur plein
+        // ecran (onKeyEvent, qui ne se declenche que si CE composant a le
+        // focus). Un ecart entre les deux confirme que le focus est ailleurs
+        // (touches recues par le systeme mais absorbees par un autre element,
+        // invisible derriere l'ecran noir) plutot qu'un vrai gel du systeme.
+        val lastComposeIdx = breadcrumbs.indexOfLast { it.contains("LiveFullscreenPlayer compose") }
+        val sinceEntry = if (lastComposeIdx >= 0) breadcrumbs.subList(lastComposeIdx, breadcrumbs.size) else breadcrumbs
+        val dispatchCount = sinceEntry.count { it.contains("dispatchKeyEvent") }
+        val onKeyCount = sinceEntry.count { it.contains("onKeyEvent") }
+        val lastFocus = sinceEntry.lastOrNull { it.contains("onFocusChanged") }
+            ?.substringAfter("isFocused=")
+        val diagnosis = if (lastComposeIdx >= 0) {
+            "Depuis la derniere entree en plein ecran :\n" +
+                "  - touches recues par Android (dispatchKeyEvent) : $dispatchCount\n" +
+                "  - touches recues par le lecteur plein ecran (onKeyEvent) : $onKeyCount\n" +
+                "  - dernier focus connu du lecteur : ${lastFocus ?: "inconnu"}\n" +
+                (if (dispatchCount > 0 && onKeyCount == 0) {
+                    "  -> Android recoit bien les touches mais le lecteur plein ecran ne les recoit JAMAIS : le focus est ailleurs (cache derriere l'ecran noir), pas un vrai gel.\n"
+                } else "") +
+                "\n"
+        } else ""
+
         val events = breadcrumbs.asReversed().joinToString("\n") { line ->
             val spaceIdx = line.indexOf(' ')
             val time = line.substring(0, spaceIdx).toLongOrNull()
             if (time != null) "${sdf.format(java.util.Date(time))}  ${line.substring(spaceIdx + 1)}" else line
         }
-        return header + "\n" + events
+        return header + "\n" + diagnosis + events
     }
 }
