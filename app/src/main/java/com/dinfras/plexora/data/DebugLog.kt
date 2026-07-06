@@ -89,7 +89,9 @@ object DebugLog {
                 (line.contains(" E/") && line.contains("plexora", ignoreCase = true))
         }
         if (interesting.isEmpty()) return "(aucune ligne fatale/ANR dans le dump logcat)"
-        return interesting.takeLast(40).asReversed().joinToString("\n")
+        // 15 lignes max : le texte ne defile pas a la telecommande, un pave
+        // plus long pousserait le reste du rapport hors de l'ecran.
+        return interesting.takeLast(15).asReversed().joinToString("\n")
     }
 
     @Synchronized
@@ -209,8 +211,11 @@ object DebugLog {
             val time = line.substring(0, spaceIdx).toLongOrNull()
             if (time != null) "${sdf.format(java.util.Date(time))}  ${line.substring(spaceIdx + 1)}" else line
         }
-        val logcatSection = "\n=== Lignes fatales du logcat (plus recent en haut) ===\n" +
-            logcatCrashSummary(context) + "\n"
-        return crashHeader + header + "\n" + diagnosis + logcatSection + "\n" + events
+        // En tete de rapport : c'est l'information la plus precieuse (cause
+        // exacte d'un crash natif/ANR), et le texte n'est pas defilable a la
+        // telecommande — tout ce qui est trop bas est illisible.
+        val logcatSection = "=== Lignes fatales du logcat (plus recent en haut) ===\n" +
+            logcatCrashSummary(context) + "\n\n"
+        return logcatSection + crashHeader + header + "\n" + diagnosis + events
     }
 }
