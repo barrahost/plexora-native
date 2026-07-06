@@ -116,24 +116,6 @@ private fun rememberPlayerSettings(): PlayerSettings {
     return settings
 }
 
-// Cree et possede un ExoPlayer pour une chaine live donnee, partageable entre
-// plusieurs vues (apercu puis plein ecran) sans jamais le recreer : sur
-// certaines TV (decodeur materiel a instance unique), detruire un lecteur
-// pour en recreer un autre juste apres pour la MEME chaine laissait le
-// nouveau decodeur incapable de demarrer (image noire, son seul, car l'audio
-// passe par un decodeur logiciel toujours disponible).
-@UnstableApi
-@Composable
-fun rememberLiveExoPlayer(streamUrl: String): ExoPlayer {
-    val context = LocalContext.current
-    val settings = rememberPlayerSettings()
-    val exoPlayer = remember(streamUrl, settings) { buildLivePlayer(context, streamUrl, settings) }
-    DisposableEffect(exoPlayer) {
-        onDispose { exoPlayer.release() }
-    }
-    return exoPlayer
-}
-
 @UnstableApi
 @Composable
 fun LiveVideoPlayer(
@@ -141,9 +123,6 @@ fun LiveVideoPlayer(
     modifier: Modifier = Modifier,
     showLoadingIndicator: Boolean = true,
     onPlayerReady: (ExoPlayer) -> Unit = {},
-    // Lecteur deja cree et possede par un appelant (voir rememberLiveExoPlayer) :
-    // on se contente alors de l'afficher, sans le creer ni le liberer ici.
-    externalPlayer: ExoPlayer? = null,
 ) {
     val context = LocalContext.current
     val settings = rememberPlayerSettings()
@@ -156,28 +135,13 @@ fun LiveVideoPlayer(
     // de savoir si ca bufferise encore ou si la lecture a echoue pour de bon.
     var playerError by remember { mutableStateOf<String?>(null) }
 
-    val ownedPlayer = if (externalPlayer == null) {
-        remember(streamUrl, settings) {
-            isBuffering = true
-            playerError = null
-            buildLivePlayer(context, streamUrl, settings)
-        }
-    } else null
-
-    if (ownedPlayer != null) {
-        DisposableEffect(ownedPlayer) {
-            onDispose { ownedPlayer.release() }
-        }
+    val exoPlayer = remember(streamUrl, settings) {
+        isBuffering = true
+        playerError = null
+        buildLivePlayer(context, streamUrl, settings)
     }
 
-    val exoPlayer = externalPlayer ?: ownedPlayer!!
-
-    // Le lecteur partage peut deja avoir demarre (ou echoue) avant que cette
-    // vue ne l'affiche (ex. apercu -> plein ecran) : on relit son etat courant
-    // au lieu d'attendre un futur changement d'etat qui ne viendra pas.
     DisposableEffect(exoPlayer) {
-        isBuffering = exoPlayer.playbackState == Player.STATE_BUFFERING || exoPlayer.playbackState == Player.STATE_IDLE
-        playerError = null
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_IDLE
@@ -188,7 +152,10 @@ fun LiveVideoPlayer(
             }
         }
         exoPlayer.addListener(listener)
-        onDispose { exoPlayer.removeListener(listener) }
+        onDispose {
+            exoPlayer.removeListener(listener)
+            exoPlayer.release()
+        }
     }
     LaunchedEffect(exoPlayer) { onPlayerReady(exoPlayer) }
 

@@ -19,7 +19,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dinfras.plexora.data.*
 import com.dinfras.plexora.player.LiveVideoPlayer
-import com.dinfras.plexora.player.rememberLiveExoPlayer
 import com.dinfras.plexora.ui.AppUiState
 import com.dinfras.plexora.ui.FullscreenHost
 import com.dinfras.plexora.ui.theme.PlexoraOrange
@@ -167,15 +166,6 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
         if (!categoriesCollapsed && !fullscreen) firstCategoryFocusRequester.requestFocus()
     }
 
-    // Un seul ExoPlayer/decodeur pour la chaine active, partage entre l'apercu
-    // et le plein ecran : sur certaines TV, le decodeur materiel n'a qu'une
-    // seule instance disponible — en creer un second pour la MEME chaine juste
-    // apres avoir libere le premier (apercu -> plein ecran) laissait le
-    // nouveau decodeur incapable de demarrer (image noire, son seul).
-    val liveUrl = activeChannel?.let { ch ->
-        ch.directUrl ?: XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, ch.streamId)
-    }
-    val sharedPlayer = liveUrl?.let { com.dinfras.plexora.player.rememberLiveExoPlayer(it) }
 
     Box(Modifier.fillMaxSize()) {
         // Colonnes + apercu masques en plein ecran : sinon le petit lecteur
@@ -236,11 +226,10 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                             Text("Sélectionne une chaîne", color = Color.Gray)
                         }
                     } else {
-                        LiveVideoPlayer(
-                            liveUrl!!,
-                            Modifier.fillMaxSize().clickable { fullscreen = true },
-                            externalPlayer = sharedPlayer,
-                        )
+                        val url = remember(channel) {
+                            channel.directUrl ?: XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, channel.streamId)
+                        }
+                        LiveVideoPlayer(url, Modifier.fillMaxSize().clickable { fullscreen = true })
                         IconButton(onClick = { fullscreen = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
                             Icon(Icons.Filled.Fullscreen, contentDescription = "Plein écran", tint = Color.White)
                         }
@@ -264,10 +253,9 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
         // lecture plein ecran restait confinee dans la zone de contenu
         // reduite par cette marge, comme une fenetre au lieu de tout l'ecran.
         val fsChannel = activeChannel
-        val fsPlayer = sharedPlayer
-        LaunchedEffect(fullscreen, fsChannel, fsPlayer) {
-            com.dinfras.plexora.data.DebugLog.event("LaunchedEffect fullscreen=$fullscreen fsChannel=${fsChannel?.name} fsPlayer=${fsPlayer != null}")
-            FullscreenHost.content.value = if (fullscreen && fsChannel != null && fsPlayer != null) {
+        LaunchedEffect(fullscreen, fsChannel) {
+            com.dinfras.plexora.data.DebugLog.event("LaunchedEffect fullscreen=$fullscreen fsChannel=${fsChannel?.name}")
+            FullscreenHost.content.value = if (fullscreen && fsChannel != null) {
                 {
                     LiveFullscreenPlayer(
                         creds = creds,
@@ -275,7 +263,6 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                         categories = visibleCategories,
                         channels = visibleChannels,
                         channel = fsChannel,
-                        player = fsPlayer,
                         onChannelChange = { activeChannel = it },
                         onExit = { fullscreen = false },
                     )
