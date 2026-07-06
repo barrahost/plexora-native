@@ -3,15 +3,19 @@ package com.dinfras.plexora.player
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -80,9 +84,14 @@ fun LiveVideoPlayer(
     // noir/fige sans rien indiquer, contrairement a TiviMate qui affiche un
     // indicateur des le lancement de la lecture.
     var isBuffering by remember { mutableStateOf(true) }
+    // Sans ca, une erreur ExoPlayer (codec/format non supporte, flux invalide)
+    // se traduisait par un ecran juste noir sans aucune indication — impossible
+    // de savoir si ca bufferise encore ou si la lecture a echoue pour de bon.
+    var playerError by remember { mutableStateOf<String?>(null) }
 
     val exoPlayer = remember(streamUrl, settings) {
         isBuffering = true
+        playerError = null
         val (minMs, maxMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs) = when (settings.bufferMode) {
             BufferMode.NONE -> intArrayOf(1_000, 3_000, 500, 500)
             BufferMode.SMALL -> intArrayOf(5_000, 15_000, 2_000, 5_000)
@@ -112,6 +121,10 @@ fun LiveVideoPlayer(
                 addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         isBuffering = playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_IDLE
+                    }
+                    override fun onPlayerError(error: PlaybackException) {
+                        isBuffering = false
+                        playerError = "${error.errorCodeName}\n${error.cause?.message ?: error.message}"
                     }
                 })
                 setMediaItem(MediaItem.fromUri(streamUrl))
@@ -151,6 +164,14 @@ fun LiveVideoPlayer(
                 modifier = Modifier.align(Alignment.Center).size(40.dp),
                 color = Color.White,
                 strokeWidth = 3.dp,
+            )
+        }
+        playerError?.let { msg ->
+            Text(
+                "Erreur de lecture\n$msg",
+                color = Color.White,
+                fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.Center).padding(16.dp),
             )
         }
     }
