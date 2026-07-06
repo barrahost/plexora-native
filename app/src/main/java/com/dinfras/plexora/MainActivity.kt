@@ -3,6 +3,8 @@ package com.dinfras.plexora
 import android.app.Activity
 import android.os.Bundle
 import android.widget.Toast
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -191,13 +193,29 @@ private fun AppContent() {
         // Categories masquees a l'import pour CETTE playlist (assistant) —
         // chargees dans l'etat partage que les ecrans consultent pour filtrer.
         com.dinfras.plexora.data.CategoryPrefs.loadActive(context, current)
-        // On ne charge PLUS les catalogues ici : parser 15000 films + 6000
-        // series en JSON de facon synchrone bloquait le demarrage a chaque
-        // lancement. Chaque ecran charge deja le sien a la demande (Films au
-        // premier passage sur l'onglet Films, etc.) — on lit juste le petit
-        // marqueur "deja configure" pour savoir si l'ecran de telechargement
-        // doit s'afficher.
-        catalogReady = com.dinfras.plexora.data.CatalogCache.isOnboarded(context)
+        // Marqueur "deja configure" : determine si l'ecran de telechargement
+        // (1er lancement) doit s'afficher, ou si on passe directement aux
+        // onglets.
+        val onboarded = com.dinfras.plexora.data.CatalogCache.isOnboarded(context)
+        if (onboarded) {
+            // Precharge les 3 catalogues (disque -> memoire) en parallele et
+            // ATTEND qu'ils soient charges avant d'afficher les onglets : a
+            // chaque redemarrage de l'appli (processus tue par Android, cache
+            // memoire vide), chaque ecran ne se chargeait auparavant qu'a la
+            // demande (au premier passage sur son onglet), ce qui remontrait
+            // un spinner par menu (Films, Series, Radio) meme si tout etait
+            // deja sur le disque. Ce court temps d'attente unique (lecture
+            // disque + parsing JSON, pas de reseau) se confond avec le
+            // spinner de verification de cache deja affiche ci-dessous — une
+            // fois passe, plus aucun chargement visible en changeant d'onglet.
+            kotlinx.coroutines.coroutineScope {
+                val live = async(Dispatchers.IO) { com.dinfras.plexora.data.CatalogCache.loadLiveFromDisk(context) }
+                val movies = async(Dispatchers.IO) { com.dinfras.plexora.data.CatalogCache.loadMoviesFromDisk(context) }
+                val series = async(Dispatchers.IO) { com.dinfras.plexora.data.CatalogCache.loadSeriesFromDisk(context) }
+                live.await(); movies.await(); series.await()
+            }
+        }
+        catalogReady = onboarded
     }
 
     if (current == null) {
