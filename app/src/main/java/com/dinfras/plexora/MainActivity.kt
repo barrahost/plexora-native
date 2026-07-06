@@ -95,6 +95,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         com.dinfras.plexora.data.DebugLog.init(this)
+        // Le plein ecran live compose une fois puis ne progresse jamais
+        // (aucune exception visible, pas de crash apparent) — capture tout
+        // plantage silencieux (le systeme relance parfois l'appli sans
+        // dialogue visible, ce qui ressemble a un simple "ecran noir fige").
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            runCatching {
+                com.dinfras.plexora.data.DebugLog.event(
+                    "CRASH thread=${thread.name} ${throwable.javaClass.simpleName}: ${throwable.message}\n" +
+                        throwable.stackTrace.take(8).joinToString("\n") { "    at $it" },
+                )
+            }
+            previousHandler?.uncaughtException(thread, throwable)
+        }
         enableEdgeToEdge()
         setContent {
             PlexoraTheme {
