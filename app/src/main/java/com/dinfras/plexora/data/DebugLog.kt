@@ -3,22 +3,19 @@ package com.dinfras.plexora.data
 import android.content.Context
 import java.io.File
 
-// Diagnostic du gel "plein ecran noir + telecommande figee" : impossible de
-// recuperer un logcat (pas d'acces adb sur la TV). Un fil d'arriere-plan
-// ecrit un battement toutes les 300ms sur le disque + des reperes aux etapes
-// cles (clic chaine, creation du lecteur...). Si le thread principal se fige,
-// les battements (ecrits depuis un fil separe) continuent normalement — leur
-// absence signalerait un blocage plus profond (systeme/GPU) plutot que
-// seulement notre code Compose.
+// Journal de diagnostic minimal : quelques evenements cles (clic chaine,
+// creation du lecteur...) ajoutes a un petit fichier, consultables dans
+// Parametres ou via le mini serveur HTTP (DebugHttpServer).
 //
-// Le seul moyen de sortir d'un gel total etant de forcer l'arret de l'appli,
-// le journal doit survivre a ce redemarrage : on AJOUTE (append) au fichier
-// au lieu de le reecrire a partir d'un tampon memoire qui, lui, est perdu au
-// redemarrage — sinon le tout premier "app start" du relancement ecrasait
-// justement les lignes du gel qu'on cherche a lire.
+// Les outils lourds utilises pour traquer le gel plein ecran (battement
+// toutes les 300ms, dump logcat en continu) ont ete RETIRES : le dump logcat
+// grossissait sans limite (les lignes "Quality" de la TCL font plusieurs Ko)
+// et sa relecture entiere en memoire allouait 70-180 Mo d'un coup — c'etait
+// devenu une cause d'OutOfMemory a part entiere (le decodeur video ne
+// pouvait plus allouer : "start: cannot allocate memory at all").
 object DebugLog {
     private const val FILE_NAME = "debug_log.txt"
-    private const val MAX_LINES = 600
+    private const val MAX_LINES = 300
     private const val TRIM_EVERY = 50
     @Volatile private var appContext: Context? = null
     @Volatile private var started = false
@@ -29,69 +26,6 @@ object DebugLog {
         started = true
         appContext = context.applicationContext
         event("=== app start ===")
-        Thread {
-            while (true) {
-                event("tick")
-                Thread.sleep(300)
-            }
-        }.apply { isDaemon = true; name = "plexora-watchdog"; start() }
-        startLogcatDump(context.applicationContext)
-    }
-
-    // Le capteur d'exceptions Java n'attrape ni les crashs natifs (decodeur,
-    // GPU) ni les kills systeme (ANR) — or l'appli se ferme toute seule sans
-    // que rien n'apparaisse dans notre journal. Une appli a le droit de lire
-    // le logcat de SON propre processus sans permission speciale : on le
-    // copie en continu sur le disque, si bien qu'au moment ou le systeme tue
-    // le processus, les dernieres lignes (dont l'erreur fatale) sont deja
-    // ecrites et consultables au prochain lancement.
-    private const val LOGCAT_FILE = "logcat_dump.txt"
-
-    private fun startLogcatDump(context: Context) {
-        Thread {
-            runCatching {
-                val file = File(context.filesDir, LOGCAT_FILE)
-                // Repart d'un fichier borne pour ne pas grossir sans fin ;
-                // on garde la fin du dump precedent (celle qui contient le
-                // crash de la session d'avant, l'information qu'on cherche).
-                if (file.exists() && file.length() > 512 * 1024) {
-                    val tail = file.readLines().takeLast(1500)
-                    file.writeText("=== dump precedent (tronque) ===\n" + tail.joinToString("\n") + "\n")
-                }
-                file.appendText("\n=== nouveau logcat (session ${System.currentTimeMillis()}) ===\n")
-                val process = Runtime.getRuntime().exec(arrayOf("logcat", "-v", "time"))
-                process.inputStream.bufferedReader().useLines { lines ->
-                    file.appendingWriter().use { writer ->
-                        for (line in lines) {
-                            writer.appendLine(line)
-                            writer.flush()
-                        }
-                    }
-                }
-            }
-        }.apply { isDaemon = true; name = "plexora-logcat"; start() }
-    }
-
-    private fun File.appendingWriter() = java.io.FileWriter(this, true).buffered()
-
-    // Extrait du dump logcat uniquement les lignes pertinentes pour un crash
-    // (erreurs fatales, ANR, traces d'exception), les plus recentes d'abord.
-    fun logcatCrashSummary(context: Context): String {
-        val file = File(context.filesDir, LOGCAT_FILE)
-        if (!file.exists()) return "(pas de dump logcat)"
-        val lines = runCatching { file.readLines() }.getOrDefault(emptyList())
-        val interesting = lines.filter { line ->
-            line.contains("FATAL", ignoreCase = true) ||
-                line.contains("AndroidRuntime", ignoreCase = false) ||
-                line.contains("ANR ", ignoreCase = false) ||
-                line.contains(" F/", ignoreCase = false) ||
-                line.contains("SIGSEGV") || line.contains("SIGABRT") ||
-                (line.contains(" E/") && line.contains("plexora", ignoreCase = true))
-        }
-        if (interesting.isEmpty()) return "(aucune ligne fatale/ANR dans le dump logcat)"
-        // 15 lignes max : le texte ne defile pas a la telecommande, un pave
-        // plus long pousserait le reste du rapport hors de l'ecran.
-        return interesting.takeLast(15).asReversed().joinToString("\n")
     }
 
     @Synchronized
@@ -117,105 +51,19 @@ object DebugLog {
 
     fun clear(context: Context) {
         runCatching { File(context.filesDir, FILE_NAME).delete() }
+        // Purge aussi l'ancien dump logcat des versions precedentes, qui
+        // pouvait atteindre des dizaines de Mo sur le disque.
+        runCatching { File(context.filesDir, "logcat_dump.txt").delete() }
     }
 
-    // Les "tick" (un par 300ms) ne servent qu'a mesurer les ecarts — les
-    // centaines de lignes qu'ils representent noient les evenements utiles
-    // (clic, creation du lecteur...) dans un journal qui ne defile meme pas
-    // a l'ecran. On resume plutot : le plus grand ecart entre deux battements
-    // consecutifs (preuve d'un vrai gel du thread principal ou non), suivi de
-    // la liste des evenements non-"tick", du plus recent au plus ancien.
     fun summarize(context: Context): String {
         val lines = runCatching { File(context.filesDir, FILE_NAME).readLines() }.getOrDefault(emptyList())
         if (lines.isEmpty()) return "(vide)"
-        var lastTickTime: Long? = null
-        var maxGap = 0L
-        var maxGapAt = 0L
-        val breadcrumbs = mutableListOf<String>()
-        for (raw in lines) {
-            val spaceIdx = raw.indexOf(' ')
-            if (spaceIdx <= 0) continue
-            val time = raw.substring(0, spaceIdx).toLongOrNull() ?: continue
-            val tag = raw.substring(spaceIdx + 1)
-            if (tag == "tick") {
-                lastTickTime?.let { prev ->
-                    val gap = time - prev
-                    if (gap > maxGap) { maxGap = gap; maxGapAt = time }
-                }
-                lastTickTime = time
-            } else {
-                breadcrumbs.add(raw)
-            }
-        }
         val sdf = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.FRANCE)
-        val header = if (maxGap > 0) {
-            "Plus grand écart entre 2 battements : ${maxGap}ms (vers ${sdf.format(java.util.Date(maxGapAt))})\n" +
-                "-> Si > 1000ms, le thread principal (ou le systeme) a vraiment gelé a ce moment.\n"
-        } else {
-            "Aucun écart notable entre les battements (aucun gel detecté).\n"
-        }
-        val crashes = breadcrumbs.filter { it.contains("CRASH ") }
-        val crashHeader = if (crashes.isNotEmpty()) {
-            "\n!!! PLANTAGE DETECTE (${crashes.size}) !!!\n" +
-                crashes.takeLast(3).joinToString("\n") { line ->
-                    val spaceIdx = line.indexOf(' ')
-                    val time = line.substring(0, spaceIdx).toLongOrNull()
-                    val msg = line.substring(spaceIdx + 1)
-                    val short = if (msg.length > 300) msg.take(300) + "…" else msg
-                    "${if (time != null) sdf.format(java.util.Date(time)) else ""}  $short"
-                } + "\n"
-        } else ""
-
-        // Diagnostic cible : depuis la derniere entree en plein ecran, compare
-        // le nombre de touches recues par Android (dispatchKeyEvent, au niveau
-        // de l'Activite) a celles qui atteignent reellement le lecteur plein
-        // ecran (onKeyEvent, qui ne se declenche que si CE composant a le
-        // focus). Un ecart entre les deux confirme que le focus est ailleurs
-        // (touches recues par le systeme mais absorbees par un autre element,
-        // invisible derriere l'ecran noir) plutot qu'un vrai gel du systeme.
-        val lastComposeIdx = breadcrumbs.indexOfLast { it.contains("LiveFullscreenPlayer compose") }
-        val sinceEntry = if (lastComposeIdx >= 0) breadcrumbs.subList(lastComposeIdx, breadcrumbs.size) else breadcrumbs
-        val dispatchCount = sinceEntry.count { it.contains("dispatchKeyEvent") }
-        val onKeyCount = sinceEntry.count { it.contains("onKeyEvent") }
-        val bypassCount = sinceEntry.count { it.contains("bypass: handler=true") }
-        val bypassNullCount = sinceEntry.count { it.contains("bypass: handler=false") }
-        val exceptionCount = sinceEntry.count { it.contains("bypass EXCEPTION") }
-        val composeCount = sinceEntry.count { it.contains("LiveFullscreenPlayer compose") }
-        val registerCount = sinceEntry.count { it.contains("keyHandler REGISTER") }
-        val unregisterCount = sinceEntry.count { it.contains("keyHandler UNREGISTER") }
-        val lastFocus = sinceEntry.lastOrNull { it.contains("onFocusChanged") }
-            ?.substringAfter("isFocused=")
-        val lastCheckpoint = sinceEntry.lastOrNull { it.contains("checkpoint ") }
-            ?.substringAfter("checkpoint ")
-        val diagnosis = if (lastComposeIdx >= 0) {
-            "Depuis la derniere entree en plein ecran :\n" +
-                "  - dernier checkpoint atteint : ${lastCheckpoint ?: "AUCUN (bloque avant meme le 1er checkpoint !)"}\n" +
-                "  - touches recues par Android (dispatchKeyEvent) : $dispatchCount\n" +
-                "  - touches recues par le lecteur plein ecran (onKeyEvent) : $onKeyCount\n" +
-                "  - dernier focus connu du lecteur : ${lastFocus ?: "inconnu"}\n" +
-                "  - repli Activite: handler present=$bypassCount absent=$bypassNullCount exceptions=$exceptionCount\n" +
-                "  - recompositions (compose)=$composeCount register=$registerCount unregister=$unregisterCount\n" +
-                (if (composeCount > 3 || unregisterCount > 2) {
-                    "  -> Boucle de recomposition suspectee (le lecteur plein ecran est detruit/recree en continu).\n"
-                } else if (dispatchCount > 0 && onKeyCount == 0) {
-                    "  -> Android recoit bien les touches mais le lecteur plein ecran ne les recoit JAMAIS : le focus est ailleurs (cache derriere l'ecran noir), pas un vrai gel.\n"
-                } else "") +
-                "\n"
-        } else ""
-
-        // Les 20 dernieres seulement : le texte n'est pas defilable a la
-        // telecommande, une liste complete depassait l'ecran sans jamais
-        // montrer le principal (le diagnostic calcule ci-dessus).
-        val events = breadcrumbs.asReversed().take(20).joinToString("\n") { line ->
+        return lines.asReversed().take(30).joinToString("\n") { line ->
             val spaceIdx = line.indexOf(' ')
-            val time = line.substring(0, spaceIdx).toLongOrNull()
+            val time = if (spaceIdx > 0) line.substring(0, spaceIdx).toLongOrNull() else null
             if (time != null) "${sdf.format(java.util.Date(time))}  ${line.substring(spaceIdx + 1)}" else line
         }
-        // En tete de rapport : c'est l'information la plus precieuse (cause
-        // exacte d'un crash natif/ANR), et le texte n'est pas defilable a la
-        // telecommande — tout ce qui est trop bas est illisible.
-        val logcatSection = "=== Lignes fatales du logcat (plus recent en haut) ===\n" +
-            logcatCrashSummary(context) + "\n\n"
-        return logcatSection + crashHeader + header + "\n" + diagnosis + events
     }
 }

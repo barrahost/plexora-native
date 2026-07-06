@@ -37,15 +37,6 @@ object DebugHttpServer {
                                     append(DebugLog.summarize(appContext))
                                     append("\n\n=== JOURNAL COMPLET (brut) ===\n")
                                     append(DebugLog.readAll(appContext))
-                                    append("\n\n=== DUMP LOGCAT COMPLET ===\n")
-                                    val logcat = File(appContext.filesDir, "logcat_dump.txt")
-                                    if (logcat.exists()) {
-                                        // Uniquement la fin : le dump complet peut faire
-                                        // plusieurs Mo, inutile de tout transferer.
-                                        append(logcat.readLines().takeLast(3000).joinToString("\n"))
-                                    } else {
-                                        append("(pas de dump logcat)")
-                                    }
                                 }
                                 val bytes = body.toByteArray(Charsets.UTF_8)
                                 val out = s.getOutputStream()
