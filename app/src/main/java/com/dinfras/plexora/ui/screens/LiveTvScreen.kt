@@ -149,12 +149,19 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
     BackHandler(enabled = !categoriesCollapsed && !fullscreen && activeChannel != null) { activeChannel = null }
 
     val firstCategoryFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
-    LaunchedEffect(categoriesCollapsed) {
-        if (!categoriesCollapsed) firstCategoryFocusRequester.requestFocus()
+    LaunchedEffect(categoriesCollapsed, fullscreen) {
+        // Ne pas reclamer le focus des categories quand on est en plein ecran :
+        // sinon ce focus entre en conflit avec celui du lecteur plein ecran
+        // (rendu par-dessus), et la telecommande ne pilote plus rien a l'ecran.
+        if (!categoriesCollapsed && !fullscreen) firstCategoryFocusRequester.requestFocus()
     }
 
     Box(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxSize()) {
+        // Colonnes + apercu masques en plein ecran : sinon le petit lecteur
+        // d'apercu (colonne 3) lit la MEME chaine en parallele du plein ecran,
+        // et le serveur (connexions limitees) affame l'un des deux flux — d'ou
+        // une image noire en plein ecran.
+        if (!fullscreen) Row(Modifier.fillMaxSize()) {
             if (!categoriesCollapsed) {
                 LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827))) {
                     item {
