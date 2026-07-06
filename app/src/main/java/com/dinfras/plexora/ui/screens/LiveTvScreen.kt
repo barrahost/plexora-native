@@ -17,8 +17,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.dinfras.plexora.data.*
-import com.dinfras.plexora.player.LiveVideoPlayer
 import com.dinfras.plexora.ui.AppUiState
 import com.dinfras.plexora.ui.LiveFullscreenLaunchArgs
 import com.dinfras.plexora.ui.theme.PlexoraOrange
@@ -225,7 +225,13 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                 }
             }
 
-            // Colonne 3 : petit apercu (haut, avec fiche programme flottante) + programme complet de la chaine (bas)
+            // Colonne 3 : fiche chaine (nom + programme en cours, sans lecteur
+            // video) + programme complet en dessous — comme Films/Series, dont
+            // la fiche de detail n'affiche jamais de video avant le plein
+            // ecran. Le 1er lecteur ExoPlayer de la session n'est donc plus
+            // construit qu'au moment ou l'utilisateur demande vraiment la
+            // lecture (2e clic -> plein ecran), au lieu d'etre cree des le
+            // premier clic rien que pour un apercu.
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 val channel = activeChannel
                 var epg by remember(channel) { mutableStateOf<List<EpgItem>>(emptyList()) }
@@ -233,20 +239,22 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                     epg = if (channel == null) emptyList() else service.getEpgForChannel(creds.username, creds.password, channel, channels)
                 }
 
-                Box(Modifier.height(200.dp).fillMaxWidth().background(Color.Black)) {
+                Box(
+                    Modifier.height(120.dp).fillMaxWidth().background(Color.Black)
+                        .clickable(enabled = channel != null) { fullscreen = true },
+                ) {
                     if (channel == null) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text("Sélectionne une chaîne", color = Color.Gray)
                         }
                     } else {
-                        val url = remember(channel) {
-                            channel.directUrl ?: XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, channel.streamId)
+                        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.Center) {
+                            Text(channel.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text("Appuie pour lancer en plein écran", color = Color.Gray, fontSize = 13.sp)
                         }
-                        LiveVideoPlayer(url, Modifier.fillMaxSize().clickable { fullscreen = true })
                         IconButton(onClick = { fullscreen = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
                             Icon(Icons.Filled.Fullscreen, contentDescription = "Plein écran", tint = Color.White)
                         }
-
                         val now = epg.firstOrNull { it.nowPlaying == 1 } ?: epg.firstOrNull()
                         if (now != null) {
                             ProgramInfoCard(now, Modifier.align(Alignment.TopEnd).padding(12.dp))
