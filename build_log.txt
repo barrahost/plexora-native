@@ -49,7 +49,7 @@ to this project's gradle.properties.
 > Task :app:processDebugResources
 
 > Task :app:compileDebugKotlin
-w: file:///C:/Claude-Work/Project/plexora-native/app/src/main/java/com/dinfras/plexora/ui/screens/LiveOsd.kt:717:9 'fun Divider(modifier: Modifier = ..., thickness: Dp = ..., color: Color = ...): Unit' is deprecated. Renamed to HorizontalDivider.
+w: file:///C:/Claude-Work/Project/plexora-native/app/src/main/java/com/dinfras/plexora/ui/screens/LiveOsd.kt:724:9 'fun Divider(modifier: Modifier = ..., thickness: Dp = ..., color: Color = ...): Unit' is deprecated. Renamed to HorizontalDivider.
 
 > Task :app:compileDebugJavaWithJavac NO-SOURCE
 > Task :app:dexBuilderDebug

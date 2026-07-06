@@ -236,10 +236,17 @@ fun LiveFullscreenPlayer(
                 }
     }
 
-    DisposableEffect(keyHandler) {
+    // Cle Unit (pas keyHandler) : la lambda est un nouvel objet a chaque
+    // recomposition (frequente : showQuickBar, osdStage...) — avec la lambda
+    // elle-meme comme cle, le gestionnaire se desinscrivait/reinscrivait en
+    // continu, laissant des fenetres ou une touche pressee tombait sur un
+    // handler nul. Les vars qu'elle capture (showQuickBar, osdStage...) sont
+    // de toute facon relues a jour a chaque appel, cle Unit ou non.
+    DisposableEffect(Unit) {
         FullscreenKeyHandler.handler = keyHandler
         onDispose { FullscreenKeyHandler.handler = null }
     }
+    SideEffect { FullscreenKeyHandler.handler = keyHandler }
 
     Box(
         Modifier
