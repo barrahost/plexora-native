@@ -77,8 +77,16 @@ class MainActivity : ComponentActivity() {
         // ne se declenchait alors jamais) — l'ecran restait noir et fige.
         // On route donc directement vers le gestionnaire du plein ecran actif
         // s'il y en a un, sans dependre du focus Compose.
-        FullscreenKeyHandler.handler?.let { handler ->
-            if (handler(androidx.compose.ui.input.key.KeyEvent(event))) return true
+        if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+            com.dinfras.plexora.data.DebugLog.event("bypass: handler=${FullscreenKeyHandler.handler != null}")
+        }
+        val h = FullscreenKeyHandler.handler
+        if (h != null) {
+            val result = runCatching { h(androidx.compose.ui.input.key.KeyEvent(event)) }
+            result.exceptionOrNull()?.let {
+                com.dinfras.plexora.data.DebugLog.event("bypass EXCEPTION: ${it}")
+            }
+            if (result.getOrDefault(false)) return true
         }
         return super.dispatchKeyEvent(event)
     }

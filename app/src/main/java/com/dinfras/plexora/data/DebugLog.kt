@@ -109,6 +109,9 @@ object DebugLog {
         val sinceEntry = if (lastComposeIdx >= 0) breadcrumbs.subList(lastComposeIdx, breadcrumbs.size) else breadcrumbs
         val dispatchCount = sinceEntry.count { it.contains("dispatchKeyEvent") }
         val onKeyCount = sinceEntry.count { it.contains("onKeyEvent") }
+        val bypassCount = sinceEntry.count { it.contains("bypass: handler=true") }
+        val bypassNullCount = sinceEntry.count { it.contains("bypass: handler=false") }
+        val exceptionCount = sinceEntry.count { it.contains("bypass EXCEPTION") }
         val lastFocus = sinceEntry.lastOrNull { it.contains("onFocusChanged") }
             ?.substringAfter("isFocused=")
         val diagnosis = if (lastComposeIdx >= 0) {
@@ -116,13 +119,17 @@ object DebugLog {
                 "  - touches recues par Android (dispatchKeyEvent) : $dispatchCount\n" +
                 "  - touches recues par le lecteur plein ecran (onKeyEvent) : $onKeyCount\n" +
                 "  - dernier focus connu du lecteur : ${lastFocus ?: "inconnu"}\n" +
+                "  - repli Activite: handler present=$bypassCount absent=$bypassNullCount exceptions=$exceptionCount\n" +
                 (if (dispatchCount > 0 && onKeyCount == 0) {
                     "  -> Android recoit bien les touches mais le lecteur plein ecran ne les recoit JAMAIS : le focus est ailleurs (cache derriere l'ecran noir), pas un vrai gel.\n"
                 } else "") +
                 "\n"
         } else ""
 
-        val events = breadcrumbs.asReversed().joinToString("\n") { line ->
+        // Les 20 dernieres seulement : le texte n'est pas defilable a la
+        // telecommande, une liste complete depassait l'ecran sans jamais
+        // montrer le principal (le diagnostic calcule ci-dessus).
+        val events = breadcrumbs.asReversed().take(20).joinToString("\n") { line ->
             val spaceIdx = line.indexOf(' ')
             val time = line.substring(0, spaceIdx).toLongOrNull()
             if (time != null) "${sdf.format(java.util.Date(time))}  ${line.substring(spaceIdx + 1)}" else line
