@@ -163,6 +163,9 @@ fun LiveFullscreenPlayer(
             }
             .focusable()
             .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    com.dinfras.plexora.data.DebugLog.event("onKeyEvent ${event.key} hasFocus=$hasFocus")
+                }
                 if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
                     when (event.type) {
                         KeyEventType.KeyDown -> {

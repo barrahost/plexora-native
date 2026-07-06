@@ -66,6 +66,16 @@ private enum class Tab(val label: String, val icon: ImageVector) {
 private val TvSafeArea = PaddingValues(horizontal = 32.dp, vertical = 20.dp)
 
 class MainActivity : ComponentActivity() {
+    // Diagnostic : confirme si Android transmet bien les evenements touche a
+    // l'Activite pendant un gel (sinon le blocage serait plus bas niveau,
+    // systeme/GPU, que notre code Compose ne pourrait pas expliquer).
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+            com.dinfras.plexora.data.DebugLog.event("Activity.dispatchKeyEvent keyCode=${event.keyCode}")
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     @UnstableApi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
