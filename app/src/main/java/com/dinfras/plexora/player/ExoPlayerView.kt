@@ -74,6 +74,18 @@ private fun buildLivePlayer(context: android.content.Context, streamUrl: String,
     }
     val loadControl = DefaultLoadControl.Builder()
         .setBufferDurationsMs(minMs, maxMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs)
+        // Plafond STRICT en octets : cause averee (logcat) du gel plein ecran
+        // live sur la TCL — un flux TS live a un debit bien superieur a un
+        // film VOD, et 30s de tampon depassaient le heap Java de la TV
+        // (192 Mo) : OutOfMemoryError, GC bloquant en boucle de 3-4s (ecran
+        // noir fige, son seul), puis kill systeme (FinalizerWatchdog timeout).
+        // prioritizeTimeOverSizeThresholds=false fait respecter ce plafond
+        // meme si la duree cible de tampon n'est pas atteinte.
+        .setTargetBufferBytes(16 * 1024 * 1024)
+        .setPrioritizeTimeOverSizeThresholds(false)
+        // Pas de retention du flux deja lu (inutile en live, ca ne fait que
+        // consommer de la memoire en plus).
+        .setBackBuffer(0, false)
         .build()
     val dataSourceFactory = DefaultHttpDataSource.Factory()
         .setUserAgent(PLAYER_USER_AGENT)
