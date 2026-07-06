@@ -469,11 +469,17 @@ private fun GeneralSection() {
         )
         Spacer(Modifier.height(10.dp))
         var debugLogText by remember { mutableStateOf("") }
+        // Plus recent en haut : plus pratique a lire/photographier sans
+        // devoir defiler jusqu'en bas d'un journal potentiellement long.
+        fun refreshLog() {
+            debugLogText = DebugLog.readAll(context).lines().asReversed().joinToString("\n")
+        }
+        LaunchedEffect(Unit) { refreshLog() }
         Row {
-            Button(onClick = { debugLogText = DebugLog.readAll(context) }) { Text("Rafraîchir") }
+            Button(onClick = { refreshLog() }) { Text("Rafraîchir") }
             Spacer(Modifier.width(8.dp))
             OutlinedButton(onClick = {
-                context.filesDir.resolve("debug_log.txt").delete()
+                DebugLog.clear(context)
                 debugLogText = "(vide)"
             }) { Text("Effacer") }
         }
