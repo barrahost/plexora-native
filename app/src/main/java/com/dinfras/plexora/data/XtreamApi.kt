@@ -154,6 +154,19 @@ object XtreamClient {
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .dispatcher(Dispatcher().apply { maxRequestsPerHost = 12; maxRequests = 24 })
+        // Beaucoup de panels Xtream bloquent les clients HTTP generiques
+        // (protection anti-scraping) et n'autorisent que les User-Agent
+        // reconnus des lecteurs IPTV (VLC, TiviMate...). Sans ceci, le
+        // User-Agent par defaut d'OkHttp ("okhttp/4.12.0") declenche un
+        // rejet (ex. HTTP 512) alors que les memes identifiants marchent
+        // dans d'autres apps IPTV sur le meme reseau.
+        .addInterceptor { chain ->
+            chain.proceed(
+                chain.request().newBuilder()
+                    .header("User-Agent", "VLC/3.0.20 LibVLC/3.0.20")
+                    .build()
+            )
+        }
         .build()
 
     fun create(baseUrl: String): XtreamService {
