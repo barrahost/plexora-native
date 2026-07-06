@@ -169,7 +169,20 @@ fun LiveVideoPlayer(
     // de savoir si ca bufferise encore ou si la lecture a echoue pour de bon.
     var playerError by remember { mutableStateOf<String?>(null) }
 
-    val exoPlayer = remember(streamUrl, settings) {
+    // Cle sur streamUrl SEUL (pas sur settings) : la toute premiere chaine
+    // d'une session fraiche (cache de reglages encore vide) voyait "settings"
+    // changer de valeur ~200-500ms apres le montage, des que le chargement
+    // asynchrone (DataStore) aboutissait — remember(streamUrl, settings)
+    // reconstruisait alors un DEUXIEME ExoPlayer pendant que le premier
+    // negociait encore le decodeur materiel, gelant l'appli durablement
+    // (confirme par le journal : deux buildLivePlayer, puis plus aucun
+    // evenement jusqu'au redemarrage force). Le lecteur est maintenant
+    // construit une seule fois par chaine avec les reglages disponibles a cet
+    // instant precis (cache si deja chaud, sinon valeurs par defaut) ; un
+    // reglage modifie dans Parametres ne s'appliquera qu'au changement de
+    // chaine suivant, ce qui est un compromis largement acceptable face au
+    // gel total.
+    val exoPlayer = remember(streamUrl) {
         isBuffering = true
         playerError = null
         buildLivePlayer(context, streamUrl, settings)
