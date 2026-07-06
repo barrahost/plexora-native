@@ -212,8 +212,10 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                     // meme chaine (deja active) : lance le plein ecran.
                     ChannelRow(idx, ch, activeChannel?.streamId == ch.streamId, creds, service) {
                         if (activeChannel?.streamId == ch.streamId) {
+                            com.dinfras.plexora.data.DebugLog.event("clic chaine active -> fullscreen=true (${ch.name})")
                             fullscreen = true
                         } else {
+                            com.dinfras.plexora.data.DebugLog.event("clic chaine -> apercu (${ch.name})")
                             activeChannel = ch
                         }
                     }
@@ -264,6 +266,7 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
         val fsChannel = activeChannel
         val fsPlayer = sharedPlayer
         LaunchedEffect(fullscreen, fsChannel, fsPlayer) {
+            com.dinfras.plexora.data.DebugLog.event("LaunchedEffect fullscreen=$fullscreen fsChannel=${fsChannel?.name} fsPlayer=${fsPlayer != null}")
             FullscreenHost.content.value = if (fullscreen && fsChannel != null && fsPlayer != null) {
                 {
                     LiveFullscreenPlayer(

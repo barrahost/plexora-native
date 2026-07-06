@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
     @UnstableApi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.dinfras.plexora.data.DebugLog.init(this)
         enableEdgeToEdge()
         setContent {
             PlexoraTheme {

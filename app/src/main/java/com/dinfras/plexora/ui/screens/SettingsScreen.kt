@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.dinfras.plexora.data.*
 import com.dinfras.plexora.ui.theme.PlexoraOrange
 import com.dinfras.plexora.ui.theme.PlexoraViolet
@@ -458,6 +459,31 @@ private fun GeneralSection() {
             resumeLast = it
             scope.launch { PlayerPrefs.setResumeLastChannel(context, it) }
         }
+        Spacer(Modifier.height(24.dp))
+        Text("Journal de diagnostic", fontWeight = FontWeight.SemiBold, fontSize = MaterialTheme.typography.titleMedium.fontSize)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Repère les derniers événements (clic chaîne, création du lecteur vidéo...) et un battement toutes les 300ms, pour diagnostiquer un blocage sans PC.",
+            fontSize = MaterialTheme.typography.bodySmall.fontSize,
+            color = Color.Gray,
+        )
+        Spacer(Modifier.height(10.dp))
+        var debugLogText by remember { mutableStateOf("") }
+        Row {
+            Button(onClick = { debugLogText = DebugLog.readAll(context) }) { Text("Rafraîchir") }
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(onClick = {
+                context.filesDir.resolve("debug_log.txt").delete()
+                debugLogText = "(vide)"
+            }) { Text("Effacer") }
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            debugLogText,
+            fontSize = 11.sp,
+            color = Color.LightGray,
+            modifier = Modifier.fillMaxWidth().background(Color(0xFF111827)).padding(10.dp),
+        )
     }
 }
 

@@ -71,6 +71,7 @@ fun LiveFullscreenPlayer(
     onChannelChange: (XtreamChannel) -> Unit,
     onExit: () -> Unit,
 ) {
+    com.dinfras.plexora.data.DebugLog.event("LiveFullscreenPlayer compose (${channel.name})")
     var osdStage by remember { mutableStateOf(0) }
     var showGrid by remember { mutableStateOf(false) }
     var showQuickBar by remember { mutableStateOf(false) }
@@ -106,6 +107,7 @@ fun LiveFullscreenPlayer(
             tries++
             delay(25)
         }
+        com.dinfras.plexora.data.DebugLog.event("focus loop initial: hasFocus=$hasFocus tries=$tries")
     }
 
     // Quand une incrustation se ferme (barre rapide, panneaux, guide), le focus
@@ -155,7 +157,10 @@ fun LiveFullscreenPlayer(
             .fillMaxSize()
             .background(Color.Black)
             .focusRequester(focusRequester)
-            .onFocusChanged { hasFocus = it.isFocused }
+            .onFocusChanged {
+                hasFocus = it.isFocused
+                com.dinfras.plexora.data.DebugLog.event("onFocusChanged isFocused=${it.isFocused}")
+            }
             .focusable()
             .onKeyEvent { event ->
                 if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {

@@ -65,6 +65,7 @@ private data class PlayerSettings(
 
 @UnstableApi
 private fun buildLivePlayer(context: android.content.Context, streamUrl: String, settings: PlayerSettings): ExoPlayer {
+    com.dinfras.plexora.data.DebugLog.event("buildLivePlayer start")
     val (minMs, maxMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs) = when (settings.bufferMode) {
         BufferMode.NONE -> intArrayOf(1_000, 3_000, 500, 500)
         BufferMode.SMALL -> intArrayOf(5_000, 15_000, 2_000, 5_000)
@@ -85,16 +86,20 @@ private fun buildLivePlayer(context: android.content.Context, streamUrl: String,
     val trackSelector = DefaultTrackSelector(context).apply {
         parameters = buildUponParameters().setTunnelingEnabled(settings.tunneling).build()
     }
-    return ExoPlayer.Builder(context, renderersFactory)
+    com.dinfras.plexora.data.DebugLog.event("buildLivePlayer: ExoPlayer.Builder().build() start")
+    val built = ExoPlayer.Builder(context, renderersFactory)
         .setLoadControl(loadControl)
         .setTrackSelector(trackSelector)
         .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
         .build()
+    com.dinfras.plexora.data.DebugLog.event("buildLivePlayer: build() done, prepare() start")
+    return built
         .apply {
             setMediaItem(MediaItem.fromUri(streamUrl))
             prepare()
             playWhenReady = true
         }
+        .also { com.dinfras.plexora.data.DebugLog.event("buildLivePlayer: prepare() done, return") }
 }
 
 @Composable
@@ -191,6 +196,7 @@ fun LiveVideoPlayer(
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
+                com.dinfras.plexora.data.DebugLog.event("AndroidView factory start")
                 // Inflate via res/layout/player_view.xml (surface_type="texture_view") :
                 // un PlayerView construit directement en code utilise un
                 // SurfaceView, dont la surface de composition separee gere mal
@@ -206,13 +212,18 @@ fun LiveVideoPlayer(
                         isFocusable = false
                         isFocusableInTouchMode = false
                     }
+                    .also { com.dinfras.plexora.data.DebugLog.event("AndroidView factory done") }
             },
             // Sans ce bloc, la vue garde le tout premier lecteur ExoPlayer
             // cree (factory ne s'execute qu'une fois) — des qu'un nouveau
             // lecteur est cree (ex. reglages charges en asynchrone juste
             // apres le montage), l'ancien est libere mais la vue continue
             // de le referencer : plus d'image, parfois du son residuel.
-            update = { it.player = exoPlayer },
+            update = {
+                com.dinfras.plexora.data.DebugLog.event("AndroidView update: set player start")
+                it.player = exoPlayer
+                com.dinfras.plexora.data.DebugLog.event("AndroidView update: set player done")
+            },
         )
         if (showLoadingIndicator && isBuffering) {
             CircularProgressIndicator(
