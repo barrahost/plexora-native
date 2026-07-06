@@ -64,13 +64,41 @@ private data class PlayerSettings(
 )
 
 @UnstableApi
+private fun buildLivePlayer(context: android.content.Context, streamUrl: String, settings: PlayerSettings): ExoPlayer {
+    val (minMs, maxMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs) = when (settings.bufferMode) {
+        BufferMode.NONE -> intArrayOf(1_000, 3_000, 500, 500)
+        BufferMode.SMALL -> intArrayOf(5_000, 15_000, 2_000, 5_000)
+        BufferMode.MEDIUM -> intArrayOf(15_000, 30_000, 2_000, 5_000)
+        BufferMode.HIGH -> intArrayOf(30_000, 60_000, 2_000, 5_000)
+    }
+    val loadControl = DefaultLoadControl.Builder()
+        .setBufferDurationsMs(minMs, maxMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs)
+        .build()
+    val dataSourceFactory = DefaultHttpDataSource.Factory()
+        .setUserAgent(PLAYER_USER_AGENT)
+        .setConnectTimeoutMs(15_000)
+        .setReadTimeoutMs(15_000)
+        .setAllowCrossProtocolRedirects(true)
+    val renderersFactory = DefaultRenderersFactory(context)
+        .setMediaCodecSelector(codecSelector(settings.audioDecoder, settings.videoDecoder))
+        .setEnableDecoderFallback(true)
+    val trackSelector = DefaultTrackSelector(context).apply {
+        parameters = buildUponParameters().setTunnelingEnabled(settings.tunneling).build()
+    }
+    return ExoPlayer.Builder(context, renderersFactory)
+        .setLoadControl(loadControl)
+        .setTrackSelector(trackSelector)
+        .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+        .build()
+        .apply {
+            setMediaItem(MediaItem.fromUri(streamUrl))
+            prepare()
+            playWhenReady = true
+        }
+}
+
 @Composable
-fun LiveVideoPlayer(
-    streamUrl: String,
-    modifier: Modifier = Modifier,
-    showLoadingIndicator: Boolean = true,
-    onPlayerReady: (ExoPlayer) -> Unit = {},
-) {
+private fun rememberPlayerSettings(): PlayerSettings {
     val context = LocalContext.current
     val settings by produceState(initialValue = PlayerSettings(BufferMode.MEDIUM, DecoderMode.AUTO, DecoderMode.AUTO, false)) {
         value = PlayerSettings(
@@ -80,6 +108,40 @@ fun LiveVideoPlayer(
             tunneling = PlayerPrefs.getTunneling(context),
         )
     }
+    return settings
+}
+
+// Cree et possede un ExoPlayer pour une chaine live donnee, partageable entre
+// plusieurs vues (apercu puis plein ecran) sans jamais le recreer : sur
+// certaines TV (decodeur materiel a instance unique), detruire un lecteur
+// pour en recreer un autre juste apres pour la MEME chaine laissait le
+// nouveau decodeur incapable de demarrer (image noire, son seul, car l'audio
+// passe par un decodeur logiciel toujours disponible).
+@UnstableApi
+@Composable
+fun rememberLiveExoPlayer(streamUrl: String): ExoPlayer {
+    val context = LocalContext.current
+    val settings = rememberPlayerSettings()
+    val exoPlayer = remember(streamUrl, settings) { buildLivePlayer(context, streamUrl, settings) }
+    DisposableEffect(exoPlayer) {
+        onDispose { exoPlayer.release() }
+    }
+    return exoPlayer
+}
+
+@UnstableApi
+@Composable
+fun LiveVideoPlayer(
+    streamUrl: String,
+    modifier: Modifier = Modifier,
+    showLoadingIndicator: Boolean = true,
+    onPlayerReady: (ExoPlayer) -> Unit = {},
+    // Lecteur deja cree et possede par un appelant (voir rememberLiveExoPlayer) :
+    // on se contente alors de l'afficher, sans le creer ni le liberer ici.
+    externalPlayer: ExoPlayer? = null,
+) {
+    val context = LocalContext.current
+    val settings = rememberPlayerSettings()
     // Aucun retour visuel pendant la mise en tampon jusqu'ici : l'ecran restait
     // noir/fige sans rien indiquer, contrairement a TiviMate qui affiche un
     // indicateur des le lancement de la lecture.
@@ -89,52 +151,39 @@ fun LiveVideoPlayer(
     // de savoir si ca bufferise encore ou si la lecture a echoue pour de bon.
     var playerError by remember { mutableStateOf<String?>(null) }
 
-    val exoPlayer = remember(streamUrl, settings) {
-        isBuffering = true
-        playerError = null
-        val (minMs, maxMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs) = when (settings.bufferMode) {
-            BufferMode.NONE -> intArrayOf(1_000, 3_000, 500, 500)
-            BufferMode.SMALL -> intArrayOf(5_000, 15_000, 2_000, 5_000)
-            BufferMode.MEDIUM -> intArrayOf(15_000, 30_000, 2_000, 5_000)
-            BufferMode.HIGH -> intArrayOf(30_000, 60_000, 2_000, 5_000)
+    val ownedPlayer = if (externalPlayer == null) {
+        remember(streamUrl, settings) {
+            isBuffering = true
+            playerError = null
+            buildLivePlayer(context, streamUrl, settings)
         }
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(minMs, maxMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs)
-            .build()
-        val dataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent(PLAYER_USER_AGENT)
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(15_000)
-            .setAllowCrossProtocolRedirects(true)
-        val renderersFactory = DefaultRenderersFactory(context)
-            .setMediaCodecSelector(codecSelector(settings.audioDecoder, settings.videoDecoder))
-            .setEnableDecoderFallback(true)
-        val trackSelector = DefaultTrackSelector(context).apply {
-            parameters = buildUponParameters().setTunnelingEnabled(settings.tunneling).build()
+    } else null
+
+    if (ownedPlayer != null) {
+        DisposableEffect(ownedPlayer) {
+            onDispose { ownedPlayer.release() }
         }
-        ExoPlayer.Builder(context, renderersFactory)
-            .setLoadControl(loadControl)
-            .setTrackSelector(trackSelector)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
-            .build()
-            .apply {
-                addListener(object : Player.Listener {
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        isBuffering = playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_IDLE
-                    }
-                    override fun onPlayerError(error: PlaybackException) {
-                        isBuffering = false
-                        playerError = "${error.errorCodeName}\n${error.cause?.message ?: error.message}"
-                    }
-                })
-                setMediaItem(MediaItem.fromUri(streamUrl))
-                prepare()
-                playWhenReady = true
-            }
     }
 
+    val exoPlayer = externalPlayer ?: ownedPlayer!!
+
+    // Le lecteur partage peut deja avoir demarre (ou echoue) avant que cette
+    // vue ne l'affiche (ex. apercu -> plein ecran) : on relit son etat courant
+    // au lieu d'attendre un futur changement d'etat qui ne viendra pas.
     DisposableEffect(exoPlayer) {
-        onDispose { exoPlayer.release() }
+        isBuffering = exoPlayer.playbackState == Player.STATE_BUFFERING || exoPlayer.playbackState == Player.STATE_IDLE
+        playerError = null
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                isBuffering = playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_IDLE
+            }
+            override fun onPlayerError(error: PlaybackException) {
+                isBuffering = false
+                playerError = "${error.errorCodeName}\n${error.cause?.message ?: error.message}"
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose { exoPlayer.removeListener(listener) }
     }
     LaunchedEffect(exoPlayer) { onPlayerReady(exoPlayer) }
 

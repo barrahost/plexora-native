@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dinfras.plexora.data.*
 import com.dinfras.plexora.player.LiveVideoPlayer
+import com.dinfras.plexora.player.rememberLiveExoPlayer
 import com.dinfras.plexora.ui.AppUiState
 import com.dinfras.plexora.ui.FullscreenHost
 import com.dinfras.plexora.ui.theme.PlexoraOrange
@@ -166,11 +167,19 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
         if (!categoriesCollapsed && !fullscreen) firstCategoryFocusRequester.requestFocus()
     }
 
+    // Un seul ExoPlayer/decodeur pour la chaine active, partage entre l'apercu
+    // et le plein ecran : sur certaines TV, le decodeur materiel n'a qu'une
+    // seule instance disponible — en creer un second pour la MEME chaine juste
+    // apres avoir libere le premier (apercu -> plein ecran) laissait le
+    // nouveau decodeur incapable de demarrer (image noire, son seul).
+    val liveUrl = activeChannel?.let { ch ->
+        ch.directUrl ?: XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, ch.streamId)
+    }
+    val sharedPlayer = liveUrl?.let { com.dinfras.plexora.player.rememberLiveExoPlayer(it) }
+
     Box(Modifier.fillMaxSize()) {
         // Colonnes + apercu masques en plein ecran : sinon le petit lecteur
-        // d'apercu (colonne 3) lit la MEME chaine en parallele du plein ecran,
-        // et le serveur (connexions limitees) affame l'un des deux flux — d'ou
-        // une image noire en plein ecran.
+        // d'apercu (colonne 3) reste affiche en parallele du plein ecran.
         if (!fullscreen) Row(Modifier.fillMaxSize()) {
             if (!categoriesCollapsed) {
                 LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827))) {
@@ -225,10 +234,11 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                             Text("Sélectionne une chaîne", color = Color.Gray)
                         }
                     } else {
-                        val url = remember(channel) {
-                            channel.directUrl ?: XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, channel.streamId)
-                        }
-                        LiveVideoPlayer(url, Modifier.fillMaxSize().clickable { fullscreen = true })
+                        LiveVideoPlayer(
+                            liveUrl!!,
+                            Modifier.fillMaxSize().clickable { fullscreen = true },
+                            externalPlayer = sharedPlayer,
+                        )
                         IconButton(onClick = { fullscreen = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
                             Icon(Icons.Filled.Fullscreen, contentDescription = "Plein écran", tint = Color.White)
                         }
@@ -252,23 +262,9 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
         // lecture plein ecran restait confinee dans la zone de contenu
         // reduite par cette marge, comme une fenetre au lieu de tout l'ecran.
         val fsChannel = activeChannel
-        // Ne retarder QUE l'entree en plein ecran (apercu -> plein ecran, meme
-        // chaine) : une fois dedans, le zapping change fsChannel sans repasser
-        // par cette LaunchedEffect a false->true, donc pas de delai a chaque zap.
-        var wasFullscreen by remember { mutableStateOf(false) }
-        LaunchedEffect(fullscreen, fsChannel) {
-            if (fullscreen && fsChannel != null && !wasFullscreen) {
-                // Le lecteur d'apercu (meme chaine) vient d'etre demonte et son
-                // ExoPlayer libere le decodeur materiel video — sur certaines TV,
-                // ce decodeur n'a qu'une seule instance disponible. Sans attendre
-                // un peu ici, le nouveau lecteur plein ecran tente de recreer un
-                // decodeur avant que l'ancien ait fini sa liberation : l'image
-                // reste noire (le son continue car lui passe par un decodeur
-                // logiciel, toujours disponible en plusieurs instances).
-                kotlinx.coroutines.delay(300)
-            }
-            wasFullscreen = fullscreen
-            FullscreenHost.content.value = if (fullscreen && fsChannel != null) {
+        val fsPlayer = sharedPlayer
+        LaunchedEffect(fullscreen, fsChannel, fsPlayer) {
+            FullscreenHost.content.value = if (fullscreen && fsChannel != null && fsPlayer != null) {
                 {
                     LiveFullscreenPlayer(
                         creds = creds,
@@ -276,6 +272,7 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                         categories = visibleCategories,
                         channels = visibleChannels,
                         channel = fsChannel,
+                        player = fsPlayer,
                         onChannelChange = { activeChannel = it },
                         onExit = { fullscreen = false },
                     )

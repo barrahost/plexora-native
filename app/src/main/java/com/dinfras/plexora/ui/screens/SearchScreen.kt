@@ -104,9 +104,17 @@ fun SearchScreen(creds: XtreamCredentials) {
     }
 
     // Plein ecran publie dans FullscreenHost (rendu hors marge overscan par
-    // MainActivity) au lieu d'etre affiche inline ici.
-    LaunchedEffect(openChannel) {
-        FullscreenHost.content.value = openChannel?.let { ch ->
+    // MainActivity) au lieu d'etre affiche inline ici. Pas d'apercu prealable
+    // ici (ouverture directe depuis la recherche) : on cree donc le lecteur
+    // partage nous-memes, pour la meme chaine tout au long du zapping.
+    val openChannelUrl = openChannel?.let { ch ->
+        ch.directUrl ?: com.dinfras.plexora.data.XtreamClient.liveStreamUrl(creds.url, creds.username, creds.password, ch.streamId)
+    }
+    val openChannelPlayer = openChannelUrl?.let { com.dinfras.plexora.player.rememberLiveExoPlayer(it) }
+    LaunchedEffect(openChannel, openChannelPlayer) {
+        val ch = openChannel
+        val player = openChannelPlayer
+        FullscreenHost.content.value = if (ch != null && player != null) {
             {
                 LiveFullscreenPlayer(
                     creds = creds,
@@ -114,10 +122,13 @@ fun SearchScreen(creds: XtreamCredentials) {
                     categories = categories,
                     channels = channels,
                     channel = ch,
+                    player = player,
                     onChannelChange = { openChannel = it },
                     onExit = { openChannel = null },
                 )
             }
+        } else {
+            null
         }
     }
     DisposableEffect(Unit) { onDispose { FullscreenHost.content.value = null } }

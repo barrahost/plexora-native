@@ -64,6 +64,10 @@ fun LiveFullscreenPlayer(
     categories: List<XtreamCategory>,
     channels: List<XtreamChannel>,
     channel: XtreamChannel,
+    // Lecteur deja cree par l'ecran appelant (LiveTvScreen) pour cette chaine —
+    // reutilise tel quel pour eviter de recreer un decodeur juste apres avoir
+    // libere celui de l'apercu (voir rememberLiveExoPlayer).
+    player: androidx.media3.exoplayer.ExoPlayer,
     onChannelChange: (XtreamChannel) -> Unit,
     onExit: () -> Unit,
 ) {
@@ -228,7 +232,7 @@ fun LiveFullscreenPlayer(
                 }
             },
     ) {
-        LiveVideoPlayer(url, Modifier.fillMaxSize())
+        LiveVideoPlayer(url, Modifier.fillMaxSize(), externalPlayer = player)
 
         when {
             showGrid -> EpgGridOverlay(
@@ -237,6 +241,7 @@ fun LiveFullscreenPlayer(
                 channels = channels,
                 activeChannel = channel,
                 previewUrl = url,
+                previewPlayer = player,
                 onSelectChannel = { onChannelChange(it) },
             )
             osdStage == 1 -> ChannelSwitcherPanel(
@@ -648,6 +653,7 @@ private fun EpgGridOverlay(
     channels: List<XtreamChannel>,
     activeChannel: XtreamChannel,
     previewUrl: String,
+    previewPlayer: androidx.media3.exoplayer.ExoPlayer,
     onSelectChannel: (XtreamChannel) -> Unit,
 ) {
     var focused by remember { mutableStateOf(activeChannel) }
@@ -663,7 +669,7 @@ private fun EpgGridOverlay(
             Box(
                 Modifier.width(280.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(Color.Black),
             ) {
-                LiveVideoPlayer(previewUrl, Modifier.fillMaxSize())
+                LiveVideoPlayer(previewUrl, Modifier.fillMaxSize(), externalPlayer = previewPlayer)
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
