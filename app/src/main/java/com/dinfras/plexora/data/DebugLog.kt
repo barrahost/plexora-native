@@ -97,6 +97,17 @@ object DebugLog {
         } else {
             "Aucun écart notable entre les battements (aucun gel detecté).\n"
         }
+        val crashes = breadcrumbs.filter { it.contains("CRASH ") }
+        val crashHeader = if (crashes.isNotEmpty()) {
+            "\n!!! PLANTAGE DETECTE (${crashes.size}) !!!\n" +
+                crashes.takeLast(3).joinToString("\n") { line ->
+                    val spaceIdx = line.indexOf(' ')
+                    val time = line.substring(0, spaceIdx).toLongOrNull()
+                    val msg = line.substring(spaceIdx + 1)
+                    val short = if (msg.length > 300) msg.take(300) + "…" else msg
+                    "${if (time != null) sdf.format(java.util.Date(time)) else ""}  $short"
+                } + "\n"
+        } else ""
 
         // Diagnostic cible : depuis la derniere entree en plein ecran, compare
         // le nombre de touches recues par Android (dispatchKeyEvent, au niveau
@@ -140,6 +151,6 @@ object DebugLog {
             val time = line.substring(0, spaceIdx).toLongOrNull()
             if (time != null) "${sdf.format(java.util.Date(time))}  ${line.substring(spaceIdx + 1)}" else line
         }
-        return header + "\n" + diagnosis + events
+        return crashHeader + header + "\n" + diagnosis + events
     }
 }

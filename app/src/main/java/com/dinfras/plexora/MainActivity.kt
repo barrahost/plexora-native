@@ -103,8 +103,8 @@ class MainActivity : ComponentActivity() {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             runCatching {
                 com.dinfras.plexora.data.DebugLog.event(
-                    "CRASH thread=${thread.name} ${throwable.javaClass.simpleName}: ${throwable.message}\n" +
-                        throwable.stackTrace.take(8).joinToString("\n") { "    at $it" },
+                    "CRASH thread=${thread.name} ${throwable.javaClass.simpleName}: ${throwable.message} | " +
+                        throwable.stackTrace.take(8).joinToString(" | ") { "at $it" },
                 )
             }
             previousHandler?.uncaughtException(thread, throwable)
