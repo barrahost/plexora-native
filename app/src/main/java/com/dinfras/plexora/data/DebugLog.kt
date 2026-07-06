@@ -61,4 +61,47 @@ object DebugLog {
     fun clear(context: Context) {
         runCatching { File(context.filesDir, FILE_NAME).delete() }
     }
+
+    // Les "tick" (un par 300ms) ne servent qu'a mesurer les ecarts — les
+    // centaines de lignes qu'ils representent noient les evenements utiles
+    // (clic, creation du lecteur...) dans un journal qui ne defile meme pas
+    // a l'ecran. On resume plutot : le plus grand ecart entre deux battements
+    // consecutifs (preuve d'un vrai gel du thread principal ou non), suivi de
+    // la liste des evenements non-"tick", du plus recent au plus ancien.
+    fun summarize(context: Context): String {
+        val lines = runCatching { File(context.filesDir, FILE_NAME).readLines() }.getOrDefault(emptyList())
+        if (lines.isEmpty()) return "(vide)"
+        var lastTickTime: Long? = null
+        var maxGap = 0L
+        var maxGapAt = 0L
+        val breadcrumbs = mutableListOf<String>()
+        for (raw in lines) {
+            val spaceIdx = raw.indexOf(' ')
+            if (spaceIdx <= 0) continue
+            val time = raw.substring(0, spaceIdx).toLongOrNull() ?: continue
+            val tag = raw.substring(spaceIdx + 1)
+            if (tag == "tick") {
+                lastTickTime?.let { prev ->
+                    val gap = time - prev
+                    if (gap > maxGap) { maxGap = gap; maxGapAt = time }
+                }
+                lastTickTime = time
+            } else {
+                breadcrumbs.add(raw)
+            }
+        }
+        val sdf = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.FRANCE)
+        val header = if (maxGap > 0) {
+            "Plus grand écart entre 2 battements : ${maxGap}ms (vers ${sdf.format(java.util.Date(maxGapAt))})\n" +
+                "-> Si > 1000ms, le thread principal (ou le systeme) a vraiment gelé a ce moment.\n"
+        } else {
+            "Aucun écart notable entre les battements (aucun gel detecté).\n"
+        }
+        val events = breadcrumbs.asReversed().joinToString("\n") { line ->
+            val spaceIdx = line.indexOf(' ')
+            val time = line.substring(0, spaceIdx).toLongOrNull()
+            if (time != null) "${sdf.format(java.util.Date(time))}  ${line.substring(spaceIdx + 1)}" else line
+        }
+        return header + "\n" + events
+    }
 }

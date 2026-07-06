@@ -469,10 +469,12 @@ private fun GeneralSection() {
         )
         Spacer(Modifier.height(10.dp))
         var debugLogText by remember { mutableStateOf("") }
-        // Plus recent en haut : plus pratique a lire/photographier sans
-        // devoir defiler jusqu'en bas d'un journal potentiellement long.
+        // Resume (plus grand ecart entre battements + evenements utiles,
+        // "tick" exclus) plutot que le dump brut : des centaines de lignes de
+        // battements noyaient l'info utile dans un texte non defilant a la
+        // telecommande.
         fun refreshLog() {
-            debugLogText = DebugLog.readAll(context).lines().asReversed().joinToString("\n")
+            debugLogText = DebugLog.summarize(context)
         }
         LaunchedEffect(Unit) { refreshLog() }
         Row {
