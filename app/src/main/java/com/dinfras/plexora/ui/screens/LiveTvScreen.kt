@@ -252,7 +252,22 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
         // lecture plein ecran restait confinee dans la zone de contenu
         // reduite par cette marge, comme une fenetre au lieu de tout l'ecran.
         val fsChannel = activeChannel
+        // Ne retarder QUE l'entree en plein ecran (apercu -> plein ecran, meme
+        // chaine) : une fois dedans, le zapping change fsChannel sans repasser
+        // par cette LaunchedEffect a false->true, donc pas de delai a chaque zap.
+        var wasFullscreen by remember { mutableStateOf(false) }
         LaunchedEffect(fullscreen, fsChannel) {
+            if (fullscreen && fsChannel != null && !wasFullscreen) {
+                // Le lecteur d'apercu (meme chaine) vient d'etre demonte et son
+                // ExoPlayer libere le decodeur materiel video — sur certaines TV,
+                // ce decodeur n'a qu'une seule instance disponible. Sans attendre
+                // un peu ici, le nouveau lecteur plein ecran tente de recreer un
+                // decodeur avant que l'ancien ait fini sa liberation : l'image
+                // reste noire (le son continue car lui passe par un decodeur
+                // logiciel, toujours disponible en plusieurs instances).
+                kotlinx.coroutines.delay(300)
+            }
+            wasFullscreen = fullscreen
             FullscreenHost.content.value = if (fullscreen && fsChannel != null) {
                 {
                     LiveFullscreenPlayer(
