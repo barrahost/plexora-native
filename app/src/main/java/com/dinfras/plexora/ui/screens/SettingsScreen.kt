@@ -439,8 +439,14 @@ private fun GeneralSection() {
         resumeLast = PlayerPrefs.getResumeLastChannel(context)
     }
 
+    val versionName = remember {
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?"
+    }
+
     Column(Modifier.fillMaxSize().widthIn(max = 520.dp).verticalScroll(rememberScrollState())) {
         Text("Général", fontWeight = FontWeight.SemiBold, fontSize = MaterialTheme.typography.titleMedium.fontSize)
+        Spacer(Modifier.height(4.dp))
+        Text("Version de l'application : $versionName", fontSize = MaterialTheme.typography.bodySmall.fontSize, color = Color.Gray)
         Spacer(Modifier.height(16.dp))
         SettingsToggle(
             "Démarrer automatiquement au démarrage d'Android",
