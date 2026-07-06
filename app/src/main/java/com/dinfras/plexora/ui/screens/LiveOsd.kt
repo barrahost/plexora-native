@@ -70,6 +70,10 @@ fun LiveFullscreenPlayer(
     var osdStage by remember { mutableStateOf(0) }
     var showGrid by remember { mutableStateOf(false) }
     var showQuickBar by remember { mutableStateOf(false) }
+    // Barre rapide ouverte manuellement (OK) : elle prend alors le focus pour
+    // etre navigable. Affichee automatiquement (demarrage/zap) : simple
+    // bandeau d'info, elle ne doit pas voler le focus (sinon zapping bloque).
+    var quickBarManual by remember { mutableStateOf(false) }
     var selectedCat by remember { mutableStateOf<String?>(channel.categoryId) }
     val focusRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
@@ -79,6 +83,10 @@ fun LiveFullscreenPlayer(
         history.removeAll { it.streamId == channel.streamId }
         history.add(0, channel)
         if (history.size > 20) history.removeRange(20, history.size)
+        // A chaque chaine (ouverture de l'appli sur la derniere chaine, ou
+        // zapping), on affiche brievement le bandeau d'infos EPG en haut —
+        // masque tout seul apres 3s. Comportement TiviMate.
+        if (!showGrid && osdStage == 0) { quickBarManual = false; showQuickBar = true }
     }
 
     // requestFocus() echoue silencieusement si le conteneur n'est pas encore
@@ -119,7 +127,7 @@ fun LiveFullscreenPlayer(
     }
     LaunchedEffect(showQuickBar, channel) {
         if (showQuickBar) {
-            delay(8000)
+            delay(3000)
             showQuickBar = false
         }
     }
@@ -165,6 +173,7 @@ fun LiveFullscreenPlayer(
                             okDownJob = null
                             if (!okWasLongPress && !showGrid && osdStage == 0) {
                                 showQuickBar = !showQuickBar
+                                quickBarManual = showQuickBar
                             }
                             true
                         }
@@ -258,6 +267,7 @@ fun LiveFullscreenPlayer(
                 channels = channels,
                 history = history,
                 activeChannel = channel,
+                takeFocus = quickBarManual,
                 onSelectChannel = { onChannelChange(it) },
                 onOpenGuide = { showQuickBar = false; showGrid = true },
             )
@@ -275,6 +285,7 @@ private fun QuickBar(
     channels: List<XtreamChannel>,
     history: List<XtreamChannel>,
     activeChannel: XtreamChannel,
+    takeFocus: Boolean,
     onSelectChannel: (XtreamChannel) -> Unit,
     onOpenGuide: () -> Unit,
 ) {
@@ -337,11 +348,14 @@ private fun QuickBar(
                     trackColor = Color(0xFF374151),
                 )
             }
-            // Focus place d'office sur la premiere tuile : sans ca, le conteneur
-            // plein ecran garde le focus et la touche OK referme la barre au
-            // lieu de valider une tuile.
+            // Focus place d'office sur la premiere tuile UNIQUEMENT quand la
+            // barre a ete ouverte manuellement (OK) : sinon le conteneur plein
+            // ecran garde le focus et OK referme la barre au lieu de valider une
+            // tuile. En affichage automatique (demarrage/zap), on ne prend PAS
+            // le focus — c'est juste un bandeau d'info, et le zapping Haut/Bas
+            // doit rester possible.
             val firstTileFocusRequester = remember { FocusRequester() }
-            LaunchedEffect(Unit) { firstTileFocusRequester.requestFocus() }
+            LaunchedEffect(takeFocus) { if (takeFocus) runCatching { firstTileFocusRequester.requestFocus() } }
             Row(
                 Modifier.fillMaxWidth().padding(16.dp).horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),

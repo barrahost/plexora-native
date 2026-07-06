@@ -50,7 +50,6 @@ import com.dinfras.plexora.ui.FullscreenHost
 import com.dinfras.plexora.ui.screens.*
 import com.dinfras.plexora.ui.theme.PlexoraBackground
 import com.dinfras.plexora.ui.theme.PlexoraTheme
-import kotlinx.coroutines.delay
 
 private enum class Tab(val label: String, val icon: ImageVector) {
     SEARCH("Rechercher", Icons.Filled.Search),
@@ -74,44 +73,29 @@ class MainActivity : ComponentActivity() {
         setContent {
             PlexoraTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    var showSplash by remember { mutableStateOf(true) }
+                    // Plus d'ecran de demarrage (splash) : on va directement au
+                    // contenu, qui reprend la derniere chaine en plein ecran.
+                    // Les prefs d'affichage se chargent sans bloquer l'UI.
                     LaunchedEffect(Unit) {
                         AppUiState.textScale.floatValue = UiPrefs.getTextScale(this@MainActivity)
                         AppUiState.overlayAlpha.floatValue = UiPrefs.getOverlayAlpha(this@MainActivity)
-                        delay(500)
-                        showSplash = false
                     }
 
                     val density = LocalDensity.current
                     CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = AppUiState.textScale.floatValue)) {
-                        if (showSplash) {
-                            SplashScreen()
-                        } else {
-                            Box(Modifier.fillMaxSize()) {
-                                Box(Modifier.fillMaxSize().padding(TvSafeArea)) {
-                                    AppContent()
-                                }
-                                // En dehors de la marge overscan : la lecture plein
-                                // ecran (chaine, film, episode) couvre reellement
-                                // tout l'ecran de la TV, pas une fenetre reduite.
-                                FullscreenHost.content.value?.invoke()
+                        Box(Modifier.fillMaxSize()) {
+                            Box(Modifier.fillMaxSize().padding(TvSafeArea)) {
+                                AppContent()
                             }
+                            // En dehors de la marge overscan : la lecture plein
+                            // ecran (chaine, film, episode) couvre reellement
+                            // tout l'ecran de la TV, pas une fenetre reduite.
+                            FullscreenHost.content.value?.invoke()
                         }
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun SplashScreen() {
-    Box(Modifier.fillMaxSize().background(PlexoraBackground), contentAlignment = Alignment.Center) {
-        Image(
-            painter = painterResource(R.drawable.logo_plexora_login),
-            contentDescription = "Plexora",
-            modifier = Modifier.width(280.dp),
-        )
     }
 }
 

@@ -48,8 +48,10 @@ object PlayerPrefs {
         context.dataStore.edit { it[KEY_AUTO_START] = enabled }
     }
 
+    // Active par defaut : a l'ouverture de l'appli, on reprend directement la
+    // derniere chaine regardee en plein ecran (comportement TiviMate).
     suspend fun getResumeLastChannel(context: Context): Boolean =
-        context.dataStore.data.first()[KEY_RESUME_LAST_CHANNEL] ?: false
+        context.dataStore.data.first()[KEY_RESUME_LAST_CHANNEL] ?: true
 
     suspend fun setResumeLastChannel(context: Context, enabled: Boolean) {
         context.dataStore.edit { it[KEY_RESUME_LAST_CHANNEL] = enabled }
