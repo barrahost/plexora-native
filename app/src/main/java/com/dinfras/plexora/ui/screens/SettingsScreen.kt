@@ -53,6 +53,7 @@ private enum class SettingsSection(val label: String) {
 
 // Sous-menu façon TiviMate : une colonne de sections a gauche, le contenu
 // de la section choisie a droite.
+@androidx.media3.common.util.UnstableApi
 @Composable
 fun SettingsScreen(
     activeCreds: XtreamCredentials,
@@ -89,15 +90,24 @@ fun SettingsScreen(
     }
 }
 
+@androidx.media3.common.util.UnstableApi
 @Composable
 private fun PlaylistsSection(activeCreds: XtreamCredentials, onSwitchPlaylist: (XtreamCredentials) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var playlists by remember { mutableStateOf<List<SavedPlaylist>>(emptyList()) }
     var showAddForm by remember { mutableStateOf(false) }
+    // Ecran de selection des categories (assistant) pour la playlist visee —
+    // ouvert juste apres un ajout, ou via l'action "Catégories" d'une playlist.
+    var selectionFor by remember { mutableStateOf<XtreamCredentials?>(null) }
 
     suspend fun refreshPlaylists() { playlists = PlaylistsStore.getAll(context) }
     LaunchedEffect(Unit) { refreshPlaylists() }
+
+    selectionFor?.let { sel ->
+        CategorySelectionScreen(creds = sel, onDone = { selectionFor = null })
+        return
+    }
 
     Column(Modifier.fillMaxSize().widthIn(max = 520.dp).verticalScroll(rememberScrollState())) {
         Text("Listes de lecture", fontWeight = FontWeight.SemiBold, fontSize = MaterialTheme.typography.titleMedium.fontSize)
@@ -133,6 +143,14 @@ private fun PlaylistsSection(activeCreds: XtreamCredentials, onSwitchPlaylist: (
                     // d'abonnement (comptes independants) : affichee ici,
                     // sous CHAQUE playlist, plutot que globalement.
                     SubscriptionExpiryLabel(p.id, p.toCredentials())
+                    Text(
+                        "Catégories à importer",
+                        color = PlexoraViolet,
+                        fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp))
+                            .clickable { selectionFor = p.toCredentials() }
+                            .padding(top = 4.dp, end = 6.dp, bottom = 2.dp),
+                    )
                 }
                 IconButton(onClick = {
                     scope.launch { PlaylistsStore.remove(context, p.id); refreshPlaylists() }
@@ -146,7 +164,12 @@ private fun PlaylistsSection(activeCreds: XtreamCredentials, onSwitchPlaylist: (
         if (showAddForm) {
             AddPlaylistForm(
                 onCancel = { showAddForm = false },
-                onSaved = { scope.launch { refreshPlaylists() }; showAddForm = false },
+                onSaved = { creds ->
+                    scope.launch { refreshPlaylists() }
+                    showAddForm = false
+                    // Enchaine sur le choix des categories a importer.
+                    selectionFor = creds
+                },
             )
         } else {
             OutlinedButton(onClick = { showAddForm = true }, modifier = Modifier.fillMaxWidth()) {
@@ -439,7 +462,7 @@ private fun GeneralSection() {
 }
 
 @Composable
-private fun AddPlaylistForm(onCancel: () -> Unit, onSaved: () -> Unit) {
+private fun AddPlaylistForm(onCancel: () -> Unit, onSaved: (XtreamCredentials) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var isM3uMode by remember { mutableStateOf(false) }
@@ -531,14 +554,14 @@ private fun AddPlaylistForm(onCancel: () -> Unit, onSaved: () -> Unit) {
                                 }
                                 val finalLabel = label.ifBlank { "Playlist M3U" }
                                 PlaylistsStore.upsert(context, finalLabel, creds)
-                                onSaved()
+                                onSaved(creds)
                             } else {
                                 val creds = XtreamCredentials(url, username, password)
                                 val info = XtreamClient.create(creds.url).getAccountInfo(creds.username, creds.password)
                                 if (info.userInfo?.auth != 1) throw InvalidPlaylistCredentialsException()
                                 val finalLabel = label.ifBlank { "$username — ${url.substringAfter("//")}" }
                                 PlaylistsStore.upsert(context, finalLabel, creds)
-                                onSaved()
+                                onSaved(creds)
                             }
                         }.onFailure {
                             error = if (it is InvalidPlaylistCredentialsException) {

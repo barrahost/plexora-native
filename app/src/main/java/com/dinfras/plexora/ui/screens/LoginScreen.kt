@@ -33,6 +33,7 @@ private sealed interface LoginState {
 
 private class InvalidCredentialsException : Exception("Identifiants incorrects.")
 
+@androidx.media3.common.util.UnstableApi
 @Composable
 fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
     val context = LocalContext.current
@@ -40,6 +41,9 @@ fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
     val deviceId = remember { getDeviceId(context) }
 
     var state by remember { mutableStateOf<LoginState>(LoginState.CheckingProvisioning) }
+    // Apres une connexion manuelle reussie, on propose l'ecran de selection
+    // des categories a importer (assistant) avant d'entrer dans l'appli.
+    var pendingSelection by remember { mutableStateOf<XtreamCredentials?>(null) }
     var isM3uMode by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
@@ -88,6 +92,12 @@ fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
         } else {
             state = LoginState.Manual
         }
+    }
+
+    // Etape "assistant" : choix des categories a importer, juste avant d'entrer.
+    pendingSelection?.let { sel ->
+        CategorySelectionScreen(creds = sel, onDone = { onLoggedIn(sel) })
+        return
     }
 
     Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -182,13 +192,13 @@ fun LoginScreen(onLoggedIn: (XtreamCredentials) -> Unit) {
                                         }
                                     }
                                     CredentialsStore.save(context, creds)
-                                    onLoggedIn(creds)
+                                    pendingSelection = creds
                                 } else {
                                     val creds = XtreamCredentials(url, username, password)
                                     val info = XtreamClient.create(creds.url).getAccountInfo(creds.username, creds.password)
                                     if (info.userInfo?.auth != 1) throw InvalidCredentialsException()
                                     CredentialsStore.save(context, creds)
-                                    onLoggedIn(creds)
+                                    pendingSelection = creds
                                 }
                             }.onFailure {
                                 error = if (it is InvalidCredentialsException) {

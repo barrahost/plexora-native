@@ -108,8 +108,17 @@ fun SeriesScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
         loading = false
     }
 
-    val filtered = remember(seriesList, selectedCat) {
-        if (selectedCat == null) seriesList else seriesList.filter { it.categoryId == selectedCat }
+    // Filtre d'affichage : categories decochees a l'import (assistant).
+    val hidden = com.dinfras.plexora.data.CategoryVisibility.hidden.value
+    val visibleCategories = remember(categories, hidden) {
+        categories.filter { !com.dinfras.plexora.data.CategoryVisibility.isSeriesHidden(it.categoryId) }
+    }
+    val visibleSeries = remember(seriesList, hidden) {
+        seriesList.filter { !com.dinfras.plexora.data.CategoryVisibility.isSeriesHidden(it.categoryId) }
+    }
+
+    val filtered = remember(visibleSeries, selectedCat) {
+        if (selectedCat == null) visibleSeries else visibleSeries.filter { it.categoryId == selectedCat }
     }
 
     if (loading) {
@@ -155,7 +164,7 @@ fun SeriesScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                         modifier = Modifier.focusRequester(firstCategoryFocusRequester),
                     )
                 }
-                items(categories) { cat ->
+                items(visibleCategories) { cat ->
                     CategoryEntryRow(
                         label = cat.categoryName,
                         active = selectedCat == cat.categoryId,

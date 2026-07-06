@@ -122,17 +122,17 @@ fun SearchScreen(creds: XtreamCredentials) {
     }
     DisposableEffect(Unit) { onDispose { FullscreenHost.content.value = null } }
 
-    // Resultats groupes par type (chaines/films/series), plutot qu'une seule
-    // liste plate, pour s'y retrouver plus vite quand la recherche remonte
-    // des correspondances dans plusieurs categories a la fois.
-    val channelResults = remember(query, channels) {
-        if (query.isBlank()) emptyList() else channels.filter { it.name.contains(query.trim(), ignoreCase = true) }.map { SearchResult.Channel(it) }.take(20)
+    // La recherche respecte aussi le filtre d'import (assistant) : une
+    // categorie decochee ne ressort pas dans les resultats.
+    val hidden = com.dinfras.plexora.data.CategoryVisibility.hidden.value
+    val channelResults = remember(query, channels, hidden) {
+        if (query.isBlank()) emptyList() else channels.filter { it.name.contains(query.trim(), ignoreCase = true) && !com.dinfras.plexora.data.CategoryVisibility.isLiveHidden(it.categoryId) }.map { SearchResult.Channel(it) }.take(20)
     }
-    val movieResults = remember(query, movies) {
-        if (query.isBlank()) emptyList() else movies.filter { it.name.contains(query.trim(), ignoreCase = true) }.map { SearchResult.Movie(it) }.take(20)
+    val movieResults = remember(query, movies, hidden) {
+        if (query.isBlank()) emptyList() else movies.filter { it.name.contains(query.trim(), ignoreCase = true) && !com.dinfras.plexora.data.CategoryVisibility.isVodHidden(it.categoryId) }.map { SearchResult.Movie(it) }.take(20)
     }
-    val seriesResults = remember(query, series) {
-        if (query.isBlank()) emptyList() else series.filter { it.name.contains(query.trim(), ignoreCase = true) }.map { SearchResult.Series(it) }.take(20)
+    val seriesResults = remember(query, series, hidden) {
+        if (query.isBlank()) emptyList() else series.filter { it.name.contains(query.trim(), ignoreCase = true) && !com.dinfras.plexora.data.CategoryVisibility.isSeriesHidden(it.categoryId) }.map { SearchResult.Series(it) }.take(20)
     }
     val hasResults = channelResults.isNotEmpty() || movieResults.isNotEmpty() || seriesResults.isNotEmpty()
 

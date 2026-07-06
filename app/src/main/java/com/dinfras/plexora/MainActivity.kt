@@ -163,6 +163,9 @@ private fun AppContent() {
     var catalogReady by remember(current) { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(current) {
         if (current == null) return@LaunchedEffect
+        // Categories masquees a l'import pour CETTE playlist (assistant) —
+        // chargees dans l'etat partage que les ecrans consultent pour filtrer.
+        com.dinfras.plexora.data.CategoryPrefs.loadActive(context, current)
         // Precharge ce qui est disponible en cache (peu importe si Films/Series
         // manquent — voir CatalogCache.isOnboarded pour pourquoi ce n'est plus
         // une condition bloquante).

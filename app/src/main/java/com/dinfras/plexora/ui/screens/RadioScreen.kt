@@ -71,8 +71,18 @@ fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -
         loading = false
     }
 
-    val filtered = remember(stations, selectedCat) {
-        if (selectedCat == null) stations else stations.filter { it.categoryId == selectedCat }
+    // Les stations radio sont des categories "live" : on respecte aussi le
+    // filtre d'import (assistant) — une categorie radio decochee disparait.
+    val hidden = com.dinfras.plexora.data.CategoryVisibility.hidden.value
+    val visibleCategories = remember(categories, hidden) {
+        categories.filter { !com.dinfras.plexora.data.CategoryVisibility.isLiveHidden(it.categoryId) }
+    }
+    val visibleStations = remember(stations, hidden) {
+        stations.filter { !com.dinfras.plexora.data.CategoryVisibility.isLiveHidden(it.categoryId) }
+    }
+
+    val filtered = remember(visibleStations, selectedCat) {
+        if (selectedCat == null) visibleStations else visibleStations.filter { it.categoryId == selectedCat }
     }
 
     if (loading) {
@@ -104,7 +114,7 @@ fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -
     }
 
     Row(Modifier.fillMaxSize()) {
-        if (categories.size > 1 && !categoriesCollapsed) {
+        if (visibleCategories.size > 1 && !categoriesCollapsed) {
             LazyColumn(Modifier.width(220.dp).fillMaxHeight().background(Color(0xFF111827))) {
                 item {
                     CategoryEntryRow(
@@ -116,7 +126,7 @@ fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -
                         modifier = Modifier.focusRequester(firstCategoryFocusRequester),
                     )
                 }
-                items(categories) { cat ->
+                items(visibleCategories) { cat ->
                     CategoryEntryRow(
                         label = cat.categoryName,
                         active = selectedCat == cat.categoryId,

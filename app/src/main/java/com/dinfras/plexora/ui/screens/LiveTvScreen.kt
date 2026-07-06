@@ -109,8 +109,19 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
         activeChannel?.let { PlayerPrefs.setLastChannelId(context, it.streamId) }
     }
 
-    val filteredChannels = remember(channels, selectedCat) {
-        if (selectedCat == null) channels else channels.filter { it.categoryId == selectedCat }
+    // Filtre d'affichage : masque les categories decochees a l'import
+    // (assistant). On travaille ensuite sur ces listes filtrees partout —
+    // liste, colonne categories ET zapping plein ecran.
+    val hidden = com.dinfras.plexora.data.CategoryVisibility.hidden.value
+    val visibleCategories = remember(categories, hidden) {
+        categories.filter { !com.dinfras.plexora.data.CategoryVisibility.isLiveHidden(it.categoryId) }
+    }
+    val visibleChannels = remember(channels, hidden) {
+        channels.filter { !com.dinfras.plexora.data.CategoryVisibility.isLiveHidden(it.categoryId) }
+    }
+
+    val filteredChannels = remember(visibleChannels, selectedCat) {
+        if (selectedCat == null) visibleChannels else visibleChannels.filter { it.categoryId == selectedCat }
     }
 
     if (loading) {
@@ -156,7 +167,7 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                             modifier = Modifier.focusRequester(firstCategoryFocusRequester),
                         )
                     }
-                    items(categories) { cat ->
+                    items(visibleCategories) { cat ->
                         CategoryEntryRow(
                             label = cat.categoryName,
                             active = selectedCat == cat.categoryId,
@@ -226,8 +237,8 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                     LiveFullscreenPlayer(
                         creds = creds,
                         service = service,
-                        categories = categories,
-                        channels = channels,
+                        categories = visibleCategories,
+                        channels = visibleChannels,
                         channel = fsChannel,
                         onChannelChange = { activeChannel = it },
                         onExit = { fullscreen = false },

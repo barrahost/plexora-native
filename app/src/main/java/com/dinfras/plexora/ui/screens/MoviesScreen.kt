@@ -105,8 +105,17 @@ fun MoviesScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
         loading = false
     }
 
-    val filtered = remember(movies, selectedCat) {
-        if (selectedCat == null) movies else movies.filter { it.categoryId == selectedCat }
+    // Filtre d'affichage : categories decochees a l'import (assistant).
+    val hidden = com.dinfras.plexora.data.CategoryVisibility.hidden.value
+    val visibleCategories = remember(categories, hidden) {
+        categories.filter { !com.dinfras.plexora.data.CategoryVisibility.isVodHidden(it.categoryId) }
+    }
+    val visibleMovies = remember(movies, hidden) {
+        movies.filter { !com.dinfras.plexora.data.CategoryVisibility.isVodHidden(it.categoryId) }
+    }
+
+    val filtered = remember(visibleMovies, selectedCat) {
+        if (selectedCat == null) visibleMovies else visibleMovies.filter { it.categoryId == selectedCat }
     }
 
     if (loading) {
@@ -163,7 +172,7 @@ fun MoviesScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                         modifier = Modifier.focusRequester(firstCategoryFocusRequester),
                     )
                 }
-                items(categories) { cat ->
+                items(visibleCategories) { cat ->
                     CategoryEntryRow(
                         label = cat.categoryName,
                         active = selectedCat == cat.categoryId,
