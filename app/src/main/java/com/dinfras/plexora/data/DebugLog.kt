@@ -35,6 +35,61 @@ object DebugLog {
                 Thread.sleep(300)
             }
         }.apply { isDaemon = true; name = "plexora-watchdog"; start() }
+        startLogcatDump(context.applicationContext)
+    }
+
+    // Le capteur d'exceptions Java n'attrape ni les crashs natifs (decodeur,
+    // GPU) ni les kills systeme (ANR) — or l'appli se ferme toute seule sans
+    // que rien n'apparaisse dans notre journal. Une appli a le droit de lire
+    // le logcat de SON propre processus sans permission speciale : on le
+    // copie en continu sur le disque, si bien qu'au moment ou le systeme tue
+    // le processus, les dernieres lignes (dont l'erreur fatale) sont deja
+    // ecrites et consultables au prochain lancement.
+    private const val LOGCAT_FILE = "logcat_dump.txt"
+
+    private fun startLogcatDump(context: Context) {
+        Thread {
+            runCatching {
+                val file = File(context.filesDir, LOGCAT_FILE)
+                // Repart d'un fichier borne pour ne pas grossir sans fin ;
+                // on garde la fin du dump precedent (celle qui contient le
+                // crash de la session d'avant, l'information qu'on cherche).
+                if (file.exists() && file.length() > 512 * 1024) {
+                    val tail = file.readLines().takeLast(1500)
+                    file.writeText("=== dump precedent (tronque) ===\n" + tail.joinToString("\n") + "\n")
+                }
+                file.appendText("\n=== nouveau logcat (session ${System.currentTimeMillis()}) ===\n")
+                val process = Runtime.getRuntime().exec(arrayOf("logcat", "-v", "time"))
+                process.inputStream.bufferedReader().useLines { lines ->
+                    file.appendingWriter().use { writer ->
+                        for (line in lines) {
+                            writer.appendLine(line)
+                            writer.flush()
+                        }
+                    }
+                }
+            }
+        }.apply { isDaemon = true; name = "plexora-logcat"; start() }
+    }
+
+    private fun File.appendingWriter() = java.io.FileWriter(this, true).buffered()
+
+    // Extrait du dump logcat uniquement les lignes pertinentes pour un crash
+    // (erreurs fatales, ANR, traces d'exception), les plus recentes d'abord.
+    fun logcatCrashSummary(context: Context): String {
+        val file = File(context.filesDir, LOGCAT_FILE)
+        if (!file.exists()) return "(pas de dump logcat)"
+        val lines = runCatching { file.readLines() }.getOrDefault(emptyList())
+        val interesting = lines.filter { line ->
+            line.contains("FATAL", ignoreCase = true) ||
+                line.contains("AndroidRuntime", ignoreCase = false) ||
+                line.contains("ANR ", ignoreCase = false) ||
+                line.contains(" F/", ignoreCase = false) ||
+                line.contains("SIGSEGV") || line.contains("SIGABRT") ||
+                (line.contains(" E/") && line.contains("plexora", ignoreCase = true))
+        }
+        if (interesting.isEmpty()) return "(aucune ligne fatale/ANR dans le dump logcat)"
+        return interesting.takeLast(40).asReversed().joinToString("\n")
     }
 
     @Synchronized
@@ -154,6 +209,8 @@ object DebugLog {
             val time = line.substring(0, spaceIdx).toLongOrNull()
             if (time != null) "${sdf.format(java.util.Date(time))}  ${line.substring(spaceIdx + 1)}" else line
         }
-        return crashHeader + header + "\n" + diagnosis + events
+        val logcatSection = "\n=== Lignes fatales du logcat (plus recent en haut) ===\n" +
+            logcatCrashSummary(context) + "\n"
+        return crashHeader + header + "\n" + diagnosis + logcatSection + "\n" + events
     }
 }
