@@ -34,12 +34,21 @@ fun RadioScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -
     val service = remember(creds) { XtreamClient.create(creds.url) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
-    var categories by remember { mutableStateOf<List<XtreamCategory>>(emptyList()) }
-    var stations by remember { mutableStateOf<List<XtreamChannel>>(emptyList()) }
+    // Deja en cache (le catalogue Live est partage) : affichage instantane,
+    // pas d'ecran de chargement a chaque retour sur l'onglet Radio.
+    val memCachedLive = remember { CatalogCache.getLive() }
+    val initialRadio = remember(memCachedLive) {
+        memCachedLive?.let { data ->
+            val radioCatIds = data.categories.filter { it.categoryName.contains("radio", ignoreCase = true) }.map { it.categoryId }.toSet()
+            data.categories.filter { it.categoryId in radioCatIds } to data.channels.filter { it.categoryId in radioCatIds }
+        }
+    }
+    var categories by remember { mutableStateOf(initialRadio?.first ?: emptyList()) }
+    var stations by remember { mutableStateOf(initialRadio?.second ?: emptyList()) }
     var selectedCat by remember { mutableStateOf<String?>(null) }
     var active by remember { mutableStateOf<XtreamChannel?>(null) }
     var pausedStation by remember { mutableStateOf<XtreamChannel?>(null) }
-    var loading by remember { mutableStateOf(true) }
+    var loading by remember { mutableStateOf(memCachedLive == null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     // Les stations radio ne sont qu'un sous-ensemble des chaines live (memes

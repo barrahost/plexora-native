@@ -25,6 +25,18 @@ import com.dinfras.plexora.ui.theme.PlexoraOrange
 
 // Sequence identique a la version web : categories -> chaines -> apercu
 // (lecteur + EPG en dessous) -> plein ecran sur une seconde action.
+//
+// La reprise automatique de la derniere chaine (resumeLastChannel) ne doit
+// se produire qu'une seule fois par lancement d'appli, a la toute premiere
+// entree dans l'onglet TV — pas a chaque retour depuis un autre onglet.
+// Sans ce garde-fou, le spinner devait rester affiche a CHAQUE visite de cet
+// onglet (meme catalogue deja en cache) pour eviter un flash du menu avant
+// le saut en plein ecran, alors que TiviMate affiche la liste instantanement
+// des le deuxieme passage.
+private object LiveTabSessionState {
+    @Volatile var resumeHandled = false
+}
+
 @androidx.media3.common.util.UnstableApi
 @Composable
 fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) -> Unit = {}) {
@@ -36,12 +48,10 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
     var selectedCat by remember { mutableStateOf<String?>(null) }
     var activeChannel by remember { mutableStateOf<XtreamChannel?>(null) }
     var fullscreen by remember { mutableStateOf(false) }
-    // Toujours vrai au depart, meme si le catalogue est deja en cache : tant
-    // qu'on n'a pas verifie s'il faut reprendre la derniere chaine, afficher
-    // le menu (meme brievement) puis basculer en plein ecran donnait un
-    // flash visible du menu avant la lecture. Le spinner reste donc affiche
-    // jusqu'a ce que cette decision soit prise (voir plus bas).
-    var loading by remember { mutableStateOf(true) }
+    // Instantane des le catalogue en cache ET la reprise deja geree une fois
+    // cette session — sinon (premiere entree) on garde le spinner le temps
+    // de decider s'il faut reprendre la derniere chaine en plein ecran.
+    var loading by remember { mutableStateOf(!(memCached != null && LiveTabSessionState.resumeHandled)) }
     var error by remember { mutableStateOf<String?>(null) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -82,22 +92,25 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
                 }.onFailure { if (!haveData) error = friendlyNetworkError(it) }
             }
         }
-        if (PlayerPrefs.getResumeLastChannel(context)) {
-            val lastId = PlayerPrefs.getLastChannelId(context)
-            val resumed = lastId?.let { id -> channels.firstOrNull { it.streamId == id } }
-            if (resumed != null) {
-                activeChannel = resumed
-                // Reprend directement en plein ecran, pas juste en apercu —
-                // comme TiviMate au demarrage. Court delai avant d'entrer en
-                // plein ecran : au tout premier lancement (a froid), la fenetre
-                // de l'Activity n'est pas encore totalement prete a l'affichage
-                // (edge-to-edge, insets...) — initialiser ExoPlayer/la surface
-                // video trop tot dans cette fenetre produisait un ecran noir
-                // (audio seul) et un blocage complet de l'appli. Le zapping
-                // manuel (fenetre deja stable) n'est pas concerne, donc pas de
-                // delai ajoute la-bas.
-                kotlinx.coroutines.delay(600)
-                fullscreen = true
+        if (!LiveTabSessionState.resumeHandled) {
+            LiveTabSessionState.resumeHandled = true
+            if (PlayerPrefs.getResumeLastChannel(context)) {
+                val lastId = PlayerPrefs.getLastChannelId(context)
+                val resumed = lastId?.let { id -> channels.firstOrNull { it.streamId == id } }
+                if (resumed != null) {
+                    activeChannel = resumed
+                    // Reprend directement en plein ecran, pas juste en apercu —
+                    // comme TiviMate au demarrage. Court delai avant d'entrer en
+                    // plein ecran : au tout premier lancement (a froid), la fenetre
+                    // de l'Activity n'est pas encore totalement prete a l'affichage
+                    // (edge-to-edge, insets...) — initialiser ExoPlayer/la surface
+                    // video trop tot dans cette fenetre produisait un ecran noir
+                    // (audio seul) et un blocage complet de l'appli. Le zapping
+                    // manuel (fenetre deja stable) n'est pas concerne, donc pas de
+                    // delai ajoute la-bas.
+                    kotlinx.coroutines.delay(600)
+                    fullscreen = true
+                }
             }
         }
         loading = false
