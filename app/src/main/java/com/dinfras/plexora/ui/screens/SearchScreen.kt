@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dinfras.plexora.data.*
-import com.dinfras.plexora.ui.FullscreenHost
+import com.dinfras.plexora.ui.LiveFullscreenLaunchArgs
 
 private sealed interface SearchResult {
     val name: String
@@ -103,24 +103,20 @@ fun SearchScreen(creds: XtreamCredentials) {
         return
     }
 
-    // Plein ecran publie dans FullscreenHost (rendu hors marge overscan par
-    // MainActivity) au lieu d'etre affiche inline ici.
+    // Plein ecran live dans sa propre Activite (voir LiveFullscreenActivity).
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) { openChannel = null }
     LaunchedEffect(openChannel) {
-        FullscreenHost.content.value = openChannel?.let { ch ->
-            {
-                LiveFullscreenPlayer(
-                    creds = creds,
-                    service = service,
-                    categories = categories,
-                    channels = channels,
-                    channel = ch,
-                    onChannelChange = { openChannel = it },
-                    onExit = { openChannel = null },
-                )
-            }
+        openChannel?.let { ch ->
+            LiveFullscreenLaunchArgs.creds = creds
+            LiveFullscreenLaunchArgs.service = service
+            LiveFullscreenLaunchArgs.categories = categories
+            LiveFullscreenLaunchArgs.channels = channels
+            LiveFullscreenLaunchArgs.initialChannel = ch
+            launcher.launch(android.content.Intent(context, com.dinfras.plexora.LiveFullscreenActivity::class.java))
         }
     }
-    DisposableEffect(Unit) { onDispose { FullscreenHost.content.value = null } }
 
     // La recherche respecte aussi le filtre d'import (assistant) : une
     // categorie decochee ne ressort pas dans les resultats.

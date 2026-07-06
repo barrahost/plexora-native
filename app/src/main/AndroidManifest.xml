@@ -29,6 +29,12 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".LiveFullscreenActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.Plexora" />
+
         <receiver
             android:name=".BootReceiver"
             android:exported="true"

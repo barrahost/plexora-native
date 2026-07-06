@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.dinfras.plexora.data.*
 import com.dinfras.plexora.player.LiveVideoPlayer
 import com.dinfras.plexora.ui.AppUiState
-import com.dinfras.plexora.ui.FullscreenHost
+import com.dinfras.plexora.ui.LiveFullscreenLaunchArgs
 import com.dinfras.plexora.ui.theme.PlexoraOrange
 
 // Sequence identique a la version web : categories -> chaines -> apercu
@@ -248,29 +248,28 @@ fun LiveTvScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
             }
         }
 
-        // Publie dans FullscreenHost (rendu au niveau racine de l'activite,
-        // hors marge overscan) au lieu d'afficher le lecteur ici — sinon la
-        // lecture plein ecran restait confinee dans la zone de contenu
-        // reduite par cette marge, comme une fenetre au lieu de tout l'ecran.
-        val fsChannel = activeChannel
-        LaunchedEffect(fullscreen, fsChannel) {
-            com.dinfras.plexora.data.DebugLog.event("LaunchedEffect fullscreen=$fullscreen fsChannel=${fsChannel?.name}")
-            FullscreenHost.content.value = if (fullscreen && fsChannel != null) {
-                {
-                    LiveFullscreenPlayer(
-                        creds = creds,
-                        service = service,
-                        categories = visibleCategories,
-                        channels = visibleChannels,
-                        channel = fsChannel,
-                        onChannelChange = { activeChannel = it },
-                        onExit = { fullscreen = false },
-                    )
-                }
-            } else {
-                null
+        // Plein ecran live dans sa propre Activite (voir LiveFullscreenActivity) :
+        // le calque Compose superpose (FullscreenHost) ne "committait" jamais
+        // ses effets pour ce lecteur riche en etat (OSD, zapping, guide), alors
+        // que Films/Series (plus simples) fonctionnent avec ce meme calque.
+        val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+        ) {
+            // A la fermeture de l'Activite plein ecran, resynchronise la chaine
+            // active (zapping effectue pendant le plein ecran).
+            LiveFullscreenLaunchArgs.lastChannel?.let { activeChannel = it }
+        }
+        LaunchedEffect(fullscreen) {
+            val fsChannel = activeChannel
+            if (fullscreen && fsChannel != null) {
+                LiveFullscreenLaunchArgs.creds = creds
+                LiveFullscreenLaunchArgs.service = service
+                LiveFullscreenLaunchArgs.categories = visibleCategories
+                LiveFullscreenLaunchArgs.channels = visibleChannels
+                LiveFullscreenLaunchArgs.initialChannel = fsChannel
+                launcher.launch(android.content.Intent(context, com.dinfras.plexora.LiveFullscreenActivity::class.java))
+                fullscreen = false
             }
         }
-        DisposableEffect(Unit) { onDispose { FullscreenHost.content.value = null } }
     }
 }
