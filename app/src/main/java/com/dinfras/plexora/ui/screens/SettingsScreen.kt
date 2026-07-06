@@ -468,6 +468,14 @@ private fun GeneralSection() {
         Spacer(Modifier.height(24.dp))
         Text("Journal de diagnostic", fontWeight = FontWeight.SemiBold, fontSize = MaterialTheme.typography.titleMedium.fontSize)
         Spacer(Modifier.height(4.dp))
+        DebugHttpServer.localIp()?.let { ip ->
+            Text(
+                "Journal complet consultable depuis un PC/telephone du meme reseau : http://$ip:${DebugHttpServer.PORT}",
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
+                color = PlexoraOrange,
+            )
+        }
+        Spacer(Modifier.height(4.dp))
         Text(
             "Repère les derniers événements (clic chaîne, création du lecteur vidéo...) et un battement toutes les 300ms, pour diagnostiquer un blocage sans PC.",
             fontSize = MaterialTheme.typography.bodySmall.fontSize,

@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         com.dinfras.plexora.data.DebugLog.init(this)
+        com.dinfras.plexora.data.DebugHttpServer.start(this)
         // Le plein ecran live compose une fois puis ne progresse jamais
         // (aucune exception visible, pas de crash apparent) — capture tout
         // plantage silencieux (le systeme relance parfois l'appli sans
