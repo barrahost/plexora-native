@@ -190,16 +190,22 @@ fun LiveVideoPlayer(
     Box(modifier) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
-            factory = {
-                PlayerView(it).apply {
-                    useController = false
-                    // Sans ca, cette vue (focusable par defaut) vole le focus
-                    // Android au conteneur Compose qui ecoute les touches D-pad
-                    // (OK, fleches) : aucune incrustation/controle ne pouvait
-                    // alors jamais s'ouvrir, meme en plein ecran normal.
-                    isFocusable = false
-                    isFocusableInTouchMode = false
-                }
+            factory = { ctx ->
+                // Inflate via res/layout/player_view.xml (surface_type="texture_view") :
+                // un PlayerView construit directement en code utilise un
+                // SurfaceView, dont la surface de composition separee gere mal
+                // les transitions/redimensionnements dans un AndroidView Compose
+                // (image noire, telecommande figee un moment).
+                (android.view.LayoutInflater.from(ctx)
+                    .inflate(com.dinfras.plexora.R.layout.player_view, null) as PlayerView)
+                    .apply {
+                        // Sans ca, cette vue (focusable par defaut) vole le focus
+                        // Android au conteneur Compose qui ecoute les touches D-pad
+                        // (OK, fleches) : aucune incrustation/controle ne pouvait
+                        // alors jamais s'ouvrir, meme en plein ecran normal.
+                        isFocusable = false
+                        isFocusableInTouchMode = false
+                    }
             },
             // Sans ce bloc, la vue garde le tout premier lecteur ExoPlayer
             // cree (factory ne s'execute qu'une fois) — des qu'un nouveau
