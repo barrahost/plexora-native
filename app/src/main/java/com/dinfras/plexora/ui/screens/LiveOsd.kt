@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.dinfras.plexora.data.*
 import com.dinfras.plexora.player.LiveVideoPlayer
 import com.dinfras.plexora.ui.AppUiState
+import com.dinfras.plexora.ui.FullscreenKeyHandler
 import com.dinfras.plexora.ui.theme.PlexoraOrange
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -152,21 +153,16 @@ fun LiveFullscreenPlayer(
     var okDownJob by remember { mutableStateOf<Job?>(null) }
     var okWasLongPress by remember { mutableStateOf(false) }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .focusRequester(focusRequester)
-            .onFocusChanged {
-                hasFocus = it.isFocused
-                com.dinfras.plexora.data.DebugLog.event("onFocusChanged isFocused=${it.isFocused}")
-            }
-            .focusable()
-            .onKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown) {
-                    com.dinfras.plexora.data.DebugLog.event("onKeyEvent ${event.key} hasFocus=$hasFocus")
-                }
-                if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
+    // Extrait en fonction nommee (plutot qu'une lambda inline sur .onKeyEvent)
+    // pour pouvoir aussi la brancher en repli au niveau de l'Activite : le
+    // journal de diagnostic a montre que le focus Compose de ce Box se perd
+    // parfois silencieusement (Android recoit bien les touches, ce composant
+    // jamais) — l'ecran plein ecran restait alors fige sans repondre.
+    val keyHandler: (androidx.compose.ui.input.key.KeyEvent) -> Boolean = handler@{ event ->
+        if (event.type == KeyEventType.KeyDown) {
+            com.dinfras.plexora.data.DebugLog.event("onKeyEvent ${event.key} hasFocus=$hasFocus")
+        }
+        if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
                     when (event.type) {
                         KeyEventType.KeyDown -> {
                             if (okDownJob == null && !showGrid && osdStage == 0) {
@@ -196,12 +192,12 @@ fun LiveFullscreenPlayer(
                         // Gauche/droite restent reserves au defilement des tuiles
                         // quand la barre rapide est ouverte.
                         Key.DirectionLeft -> {
-                            if (showQuickBar) return@onKeyEvent false
+                            if (showQuickBar) return@handler false
                             osdStage = (osdStage + 1).coerceAtMost(3)
                             true
                         }
                         Key.DirectionRight -> {
-                            if (showQuickBar) return@onKeyEvent false
+                            if (showQuickBar) return@handler false
                             // Symetrique de GAUCHE : on referme les incrustations un niveau a la fois
                             // (categories seules -> categories+chaines -> chaines+programme -> video nue).
                             if (osdStage > 0) osdStage -= 1
@@ -218,7 +214,7 @@ fun LiveFullscreenPlayer(
                             // sinon (panneau chaines/categories ouvert), il faut le laisser
                             // remonter au systeme de focus de Compose pour naviguer dans la
                             // LazyColumn, sinon impossible de monter/descendre dans la liste.
-                            if (osdStage != 0) return@onKeyEvent false
+                            if (osdStage != 0) return@handler false
                             val catList = if (selectedCat == null) channels else channels.filter { it.categoryId == selectedCat }
                             val zapList = if (catList.any { it.streamId == channel.streamId }) catList else channels
                             val idx = zapList.indexOfFirst { it.streamId == channel.streamId }
@@ -238,7 +234,24 @@ fun LiveFullscreenPlayer(
                 } else {
                     false
                 }
-            },
+    }
+
+    DisposableEffect(keyHandler) {
+        FullscreenKeyHandler.handler = keyHandler
+        onDispose { FullscreenKeyHandler.handler = null }
+    }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .focusRequester(focusRequester)
+            .onFocusChanged {
+                hasFocus = it.isFocused
+                com.dinfras.plexora.data.DebugLog.event("onFocusChanged isFocused=${it.isFocused}")
+            }
+            .focusable()
+            .onKeyEvent { keyHandler(it) },
     ) {
         LiveVideoPlayer(url, Modifier.fillMaxSize(), externalPlayer = player)
 

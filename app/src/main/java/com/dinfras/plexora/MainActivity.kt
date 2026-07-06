@@ -47,6 +47,7 @@ import com.dinfras.plexora.data.UiPrefs
 import com.dinfras.plexora.data.XtreamCredentials
 import com.dinfras.plexora.ui.AppUiState
 import com.dinfras.plexora.ui.FullscreenHost
+import com.dinfras.plexora.ui.FullscreenKeyHandler
 import com.dinfras.plexora.ui.screens.*
 import com.dinfras.plexora.ui.theme.PlexoraBackground
 import com.dinfras.plexora.ui.theme.PlexoraTheme
@@ -66,12 +67,18 @@ private enum class Tab(val label: String, val icon: ImageVector) {
 private val TvSafeArea = PaddingValues(horizontal = 32.dp, vertical = 20.dp)
 
 class MainActivity : ComponentActivity() {
-    // Diagnostic : confirme si Android transmet bien les evenements touche a
-    // l'Activite pendant un gel (sinon le blocage serait plus bas niveau,
-    // systeme/GPU, que notre code Compose ne pourrait pas expliquer).
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (event.action == android.view.KeyEvent.ACTION_DOWN) {
             com.dinfras.plexora.data.DebugLog.event("Activity.dispatchKeyEvent keyCode=${event.keyCode}")
+        }
+        // Repli plein ecran live : le journal de diagnostic a confirme que
+        // cette methode recoit toujours les touches de maniere fiable, meme
+        // quand le focus Compose du lecteur plein ecran se perd (onKeyEvent
+        // ne se declenchait alors jamais) — l'ecran restait noir et fige.
+        // On route donc directement vers le gestionnaire du plein ecran actif
+        // s'il y en a un, sans dependre du focus Compose.
+        FullscreenKeyHandler.handler?.let { handler ->
+            if (handler(androidx.compose.ui.input.key.KeyEvent(event))) return true
         }
         return super.dispatchKeyEvent(event)
     }
