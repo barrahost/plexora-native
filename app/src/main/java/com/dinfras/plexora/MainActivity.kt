@@ -78,7 +78,7 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(Unit) {
                         AppUiState.textScale.floatValue = UiPrefs.getTextScale(this@MainActivity)
                         AppUiState.overlayAlpha.floatValue = UiPrefs.getOverlayAlpha(this@MainActivity)
-                        delay(1000)
+                        delay(500)
                         showSplash = false
                     }
 
@@ -166,12 +166,12 @@ private fun AppContent() {
         // Categories masquees a l'import pour CETTE playlist (assistant) —
         // chargees dans l'etat partage que les ecrans consultent pour filtrer.
         com.dinfras.plexora.data.CategoryPrefs.loadActive(context, current)
-        // Precharge ce qui est disponible en cache (peu importe si Films/Series
-        // manquent — voir CatalogCache.isOnboarded pour pourquoi ce n'est plus
-        // une condition bloquante).
-        com.dinfras.plexora.data.CatalogCache.loadLiveFromDisk(context)
-        com.dinfras.plexora.data.CatalogCache.loadMoviesFromDisk(context)
-        com.dinfras.plexora.data.CatalogCache.loadSeriesFromDisk(context)
+        // On ne charge PLUS les catalogues ici : parser 15000 films + 6000
+        // series en JSON de facon synchrone bloquait le demarrage a chaque
+        // lancement. Chaque ecran charge deja le sien a la demande (Films au
+        // premier passage sur l'onglet Films, etc.) — on lit juste le petit
+        // marqueur "deja configure" pour savoir si l'ecran de telechargement
+        // doit s'afficher.
         catalogReady = com.dinfras.plexora.data.CatalogCache.isOnboarded(context)
     }
 

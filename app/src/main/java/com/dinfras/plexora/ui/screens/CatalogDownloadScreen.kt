@@ -1,7 +1,5 @@
 package com.dinfras.plexora.ui.screens
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -46,11 +44,12 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
     // bouton Reessayer au lieu d'entrer dans une appli vide.
     var blocked by remember { mutableStateOf(false) }
     var attempt by remember { mutableStateOf(0) }
-    // 4 etapes : TV+Radios, Films, Series, Guide TV lance — pas de compteur
-    // d'octets possible (l'API renvoie chaque catalogue en un seul bloc JSON,
-    // sans pagination ni taille annoncee a l'avance).
-    var stepsDone by remember { mutableStateOf(0) }
-    val progress by animateFloatAsState(stepsDone / 4f, animationSpec = tween(400), label = "catalogProgress")
+    // Pas de vraie progression en octets possible : l'API renvoie chaque
+    // catalogue en un seul bloc JSON, sans taille annoncee. Un pourcentage par
+    // etapes resterait "coince" sur l'etape la plus longue (les series). Les 4
+    // lignes ci-dessous (spinner -> coche verte) donnent la vraie progression ;
+    // la barre est juste un indicateur "en cours" indetermine.
+    var done by remember { mutableStateOf(false) }
 
     LaunchedEffect(creds, attempt) {
         if (creds.isM3u()) {
@@ -66,13 +65,10 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
             val radioCatIds = catalog.liveCategories.filter { it.categoryName.contains("radio", ignoreCase = true) }.map { it.categoryId }.toSet()
             liveCount = catalog.liveChannels.count { it.categoryId !in radioCatIds }
             radioCount = catalog.liveChannels.count { it.categoryId in radioCatIds }
-            stepsDone = 1
             movieCount = catalog.movies.size
-            stepsDone = 2
             seriesCount = catalog.series.size
-            stepsDone = 3
             CatalogCache.markOnboarded(context)
-            stepsDone = 4
+            done = true
             onComplete()
             return@LaunchedEffect
         }
@@ -85,7 +81,6 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
             radioCount = liveChannels.count { it.categoryId in radioCatIds }
             CatalogCache.setLive(context, CatalogCache.LiveData(liveCats, liveChannels))
         }.onFailure { error = friendlyNetworkError(it) }
-        stepsDone = 1
 
         runCatching {
             val movieCats = service.getVodCategories(creds.username, creds.password)
@@ -93,7 +88,6 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
             movieCount = movies.size
             CatalogCache.setMovies(context, CatalogCache.MovieData(movieCats, movies))
         }.onFailure { if (error == null) error = friendlyNetworkError(it) }
-        stepsDone = 2
 
         runCatching {
             val seriesCats = service.getSeriesCategories(creds.username, creds.password)
@@ -101,7 +95,6 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
             seriesCount = seriesList.size
             CatalogCache.setSeries(context, CatalogCache.SeriesData(seriesCats, seriesList))
         }.onFailure { if (error == null) error = friendlyNetworkError(it) }
-        stepsDone = 3
 
         val nothingFetched = CatalogCache.getLive() == null && CatalogCache.getMovies() == null && CatalogCache.getSeries() == null
         if (nothingFetched && error != null) {
@@ -115,7 +108,7 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
         LocalEpgStore.loadFromDisk(context)
         LocalEpgStore.refreshOnceIfNeeded(context, creds)
         CatalogCache.markOnboarded(context)
-        stepsDone = 4
+        done = true
 
         onComplete()
     }
@@ -130,12 +123,13 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
             Spacer(Modifier.height(32.dp))
             Text("Récupération de ton abonnement...", fontWeight = FontWeight.SemiBold, color = Color.White)
             Spacer(Modifier.height(16.dp))
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-                color = PlexoraOrange,
-                trackColor = Color(0xFF374151),
-            )
+            if (!done) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                    color = PlexoraOrange,
+                    trackColor = Color(0xFF374151),
+                )
+            }
             Spacer(Modifier.height(24.dp))
 
             CatalogCountRow("Chaînes TV", liveCount)
@@ -163,7 +157,7 @@ fun CatalogDownloadScreen(creds: XtreamCredentials, onComplete: () -> Unit) {
                     radioCount = null
                     movieCount = null
                     seriesCount = null
-                    stepsDone = 0
+                    done = false
                     attempt++
                 }) { Text("Réessayer") }
             }
