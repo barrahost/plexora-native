@@ -191,9 +191,24 @@ fun LiveVideoPlayer(
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
+                val name = when (playbackState) {
+                    Player.STATE_IDLE -> "IDLE"
+                    Player.STATE_BUFFERING -> "BUFFERING"
+                    Player.STATE_READY -> "READY"
+                    Player.STATE_ENDED -> "ENDED"
+                    else -> "?$playbackState"
+                }
+                com.dinfras.plexora.data.DebugLog.event("onPlaybackStateChanged $name")
                 isBuffering = playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_IDLE
             }
+            override fun onRenderedFirstFrame() {
+                com.dinfras.plexora.data.DebugLog.event("onRenderedFirstFrame")
+            }
+            override fun onIsPlayingChanged(isPlayingNow: Boolean) {
+                com.dinfras.plexora.data.DebugLog.event("onIsPlayingChanged $isPlayingNow")
+            }
             override fun onPlayerError(error: PlaybackException) {
+                com.dinfras.plexora.data.DebugLog.event("onPlayerError ${error.errorCodeName} ${error.cause?.message ?: error.message}")
                 isBuffering = false
                 playerError = "${error.errorCodeName}\n${error.cause?.message ?: error.message}"
             }

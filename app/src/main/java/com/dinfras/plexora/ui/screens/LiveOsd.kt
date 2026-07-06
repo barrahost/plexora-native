@@ -108,6 +108,20 @@ fun LiveFullscreenPlayer(
         com.dinfras.plexora.data.DebugLog.event("focus loop initial: hasFocus=$hasFocus tries=$tries")
     }
 
+    // Battement regulier : sert uniquement au diagnostic. S'il s'arrete net,
+    // le thread principal est reellement fige (deadlock quelque part) ; s'il
+    // continue alors que l'image reste noire, le probleme est localise au
+    // lecteur (bloque en buffering ou en erreur silencieuse) et pas a un gel
+    // general de l'appli.
+    LaunchedEffect(channel) {
+        var beat = 0
+        while (true) {
+            delay(2000)
+            beat++
+            com.dinfras.plexora.data.DebugLog.event("heartbeat #$beat (${channel.name})")
+        }
+    }
+
     // Quand une incrustation se ferme (barre rapide, panneaux, guide), le focus
     // etait sur un de ses elements desormais disparus — on le ramene sur le
     // conteneur video pour que la telecommande reste operationnelle.
