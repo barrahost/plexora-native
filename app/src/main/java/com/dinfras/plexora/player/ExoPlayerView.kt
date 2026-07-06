@@ -120,18 +120,34 @@ private fun buildLivePlayer(context: android.content.Context, streamUrl: String,
         .also { com.dinfras.plexora.data.DebugLog.event("buildLivePlayer: prepare() done, return") }
 }
 
+// Cache global (meme principe que CatalogCache) : les preferences lecteur
+// sont lues une seule fois par processus au lieu d'a chaque composition.
+// Cause averee (journal de diagnostic) du gel plein ecran persistant : sans
+// ce cache, CHAQUE nouvelle chaine reconstruisait le lecteur avec des
+// reglages par defaut, puis un DEUXIEME ExoPlayer ~200-500ms plus tard des
+// que les vrais reglages arrivaient de facon asynchrone (DataStore) — les
+// deux instances se disputaient alors le decodeur materiel unique de la TV,
+// ce qui pouvait geler l'appli durablement (buildLivePlayer visible deux
+// fois de suite dans le journal pour une seule selection de chaine).
+private object PlayerSettingsCache {
+    @Volatile var cached: PlayerSettings? = null
+}
+
 @Composable
 private fun rememberPlayerSettings(): PlayerSettings {
     val context = LocalContext.current
-    val settings by produceState(initialValue = PlayerSettings(BufferMode.MEDIUM, DecoderMode.AUTO, DecoderMode.AUTO, false)) {
-        value = PlayerSettings(
-            bufferMode = BufferPrefs.get(context),
-            audioDecoder = PlayerPrefs.getAudioDecoder(context),
-            videoDecoder = PlayerPrefs.getVideoDecoder(context),
-            tunneling = PlayerPrefs.getTunneling(context),
-        )
+    var loaded by remember { mutableStateOf(PlayerSettingsCache.cached) }
+    LaunchedEffect(Unit) {
+        if (loaded == null) {
+            loaded = PlayerSettings(
+                bufferMode = BufferPrefs.get(context),
+                audioDecoder = PlayerPrefs.getAudioDecoder(context),
+                videoDecoder = PlayerPrefs.getVideoDecoder(context),
+                tunneling = PlayerPrefs.getTunneling(context),
+            ).also { PlayerSettingsCache.cached = it }
+        }
     }
-    return settings
+    return loaded ?: PlayerSettings(BufferMode.MEDIUM, DecoderMode.AUTO, DecoderMode.AUTO, false)
 }
 
 @UnstableApi
