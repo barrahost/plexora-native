@@ -15,8 +15,16 @@ import java.io.File
 // pouvait plus allouer : "start: cannot allocate memory at all").
 object DebugLog {
     private const val FILE_NAME = "debug_log.txt"
-    private const val MAX_LINES = 300
-    private const val TRIM_EVERY = 50
+    // Releve a 3000 (etait 300) : la nouvelle instrumentation (compteur de
+    // recompositions, battement regulier) genere beaucoup plus de lignes sur
+    // une session de lecture prolongee, et les evenements les plus utiles
+    // (battements, premier signe de ralentissement) se faisaient trimmer
+    // avant meme de pouvoir etre consultes via le serveur de diagnostic.
+    // Reste largement sous la taille qui avait cause l'OOM du dump logcat
+    // (des dizaines de Mo) : quelques milliers de courtes lignes = quelques
+    // centaines de Ko au pire.
+    private const val MAX_LINES = 3000
+    private const val TRIM_EVERY = 200
     @Volatile private var appContext: Context? = null
     @Volatile private var started = false
     private var eventsSinceTrim = 0

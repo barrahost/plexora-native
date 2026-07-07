@@ -57,6 +57,16 @@ private fun durationMinutes(item: EpgItem): Long =
 // GAUCHE de la telecommande fait defiler 3 niveaux d'incrustation (liste des
 // chaines + info programme -> categories + liste -> categories seules), et
 // RETOUR ouvre le guide TV multi-chaines plutot que de quitter directement.
+// Compteur global (survit aux recompositions ET a la reconstruction complete
+// du noeud Compose, contrairement a un simple remember) : sert uniquement a
+// objectiver, dans le journal de diagnostic, la frequence reelle a laquelle
+// ce composable se reconstruit entierement pendant une session de lecture —
+// suspecte de generer une pression memoire progressive (lags, ecran qui se
+// fige, plantage) sans qu'aucune erreur ExoPlayer ne soit jamais levee.
+private object LiveFullscreenComposeStats {
+    @Volatile var count = 0
+}
+
 @androidx.media3.common.util.UnstableApi
 @Composable
 fun LiveFullscreenPlayer(
@@ -68,7 +78,8 @@ fun LiveFullscreenPlayer(
     onChannelChange: (XtreamChannel) -> Unit,
     onExit: () -> Unit,
 ) {
-    com.dinfras.plexora.data.DebugLog.event("LiveFullscreenPlayer compose (${channel.name})")
+    LiveFullscreenComposeStats.count++
+    val composeIndex = LiveFullscreenComposeStats.count
     var osdStage by remember { mutableStateOf(0) }
     var showGrid by remember { mutableStateOf(false) }
     var showQuickBar by remember { mutableStateOf(false) }
@@ -80,6 +91,10 @@ fun LiveFullscreenPlayer(
     val focusRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
     val history = remember { mutableStateListOf<XtreamChannel>() }
+    com.dinfras.plexora.data.DebugLog.event(
+        "LiveFullscreenPlayer compose #$composeIndex (${channel.name}) " +
+            "osdStage=$osdStage showGrid=$showGrid showQuickBar=$showQuickBar quickBarManual=$quickBarManual",
+    )
     com.dinfras.plexora.data.DebugLog.event("checkpoint A: vars init done")
 
     LaunchedEffect(channel) {
@@ -98,6 +113,12 @@ fun LiveFullscreenPlayer(
     // aucune touche (OK, fleches) n'atteint le lecteur plein ecran. On
     // reessaie donc jusqu'a ce qu'il capte reellement le focus.
     var hasFocus by remember { mutableStateOf(false) }
+    // Log a chaque COMMIT de composition (pas juste au montage initial) :
+    // permet de corréler, dans le journal, la valeur de hasFocus au moment
+    // exact de chaque recomposition #composeIndex.
+    SideEffect {
+        com.dinfras.plexora.data.DebugLog.event("compose #$composeIndex committed, hasFocus=$hasFocus")
+    }
     LaunchedEffect(Unit) {
         var tries = 0
         while (!hasFocus && tries < 40) {
