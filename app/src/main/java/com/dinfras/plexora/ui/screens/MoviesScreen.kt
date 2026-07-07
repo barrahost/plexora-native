@@ -59,51 +59,17 @@ fun MoviesScreen(creds: XtreamCredentials, onCategoriesVisibleChange: (Boolean) 
     val service = remember(creds) { XtreamClient.create(creds.url) }
 
     val screenContext = LocalContext.current
-    val memCached = remember { CatalogCache.getMovies() }
-    var categories by remember { mutableStateOf(memCached?.categories ?: emptyList()) }
-    var movies by remember { mutableStateOf(memCached?.movies ?: emptyList()) }
+    // Chargement re-cable en ViewModel Hilt (etape 5/6 du portage
+    // architecture StreamVault-IPTV, voir le plan) : lit/ecrit le catalogue
+    // via CatalogRepository (Room) au lieu de CatalogCache.kt directement.
+    val viewModel: com.dinfras.plexora.ui.viewmodel.MoviesViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    LaunchedEffect(creds) { viewModel.loadIfNeeded(screenContext, creds, service) }
+    val categories = viewModel.categories
+    val movies = viewModel.movies
+    val loading = viewModel.loading
+    val error = viewModel.error
     var selectedCat by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<XtreamMovie?>(null) }
-    // Deja en cache (memoire ou disque) : affichage instantane, pas d'ecran de chargement.
-    var loading by remember { mutableStateOf(memCached == null) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(creds) {
-        var haveData = memCached != null
-        var stale = memCached == null || CatalogCache.isStale(memCached.fetchedAt)
-        if (!haveData) {
-            CatalogCache.loadMoviesFromDisk(screenContext)?.let {
-                categories = it.categories
-                movies = it.movies
-                loading = false
-                haveData = true
-                stale = CatalogCache.isStale(it.fetchedAt)
-            }
-        }
-        // Recupere une fois en entier juste apres la connexion
-        // (CatalogDownloadScreen) : on ne relance l'appel reseau ici que
-        // s'il n'y a rien en cache, ou que le cache a plus de 24h.
-        if (!haveData || stale) {
-            if (creds.isM3u()) {
-                val catalog = M3uCatalogSync.refreshAll(screenContext, creds)
-                if (catalog != null) {
-                    categories = catalog.movieCategories
-                    movies = catalog.movies
-                } else if (!haveData) {
-                    error = "Impossible de récupérer la playlist M3U."
-                }
-            } else {
-                runCatching {
-                    val newCategories = service.getVodCategories(creds.username, creds.password)
-                    val newMovies = service.getVodStreams(creds.username, creds.password).filter { it.streamId > 0 }
-                    categories = newCategories
-                    movies = newMovies
-                    CatalogCache.setMovies(screenContext, CatalogCache.MovieData(newCategories, newMovies))
-                }.onFailure { if (!haveData) error = friendlyNetworkError(it) }
-            }
-        }
-        loading = false
-    }
 
     // Filtre d'affichage : categories decochees a l'import (assistant).
     val hidden = com.dinfras.plexora.data.CategoryVisibility.hidden.value
