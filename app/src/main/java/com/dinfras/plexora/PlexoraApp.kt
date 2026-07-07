@@ -1,12 +1,15 @@
 package com.dinfras.plexora
 
 import android.app.Application
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.dinfras.plexora.data.XtreamClient
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 
 // Configure Coil une seule fois pour toute l'appli : cache disque/memoire
 // explicite + fondu a l'affichage (au lieu d'un pop-in brutal, comme
@@ -15,9 +18,19 @@ import dagger.hilt.android.HiltAndroidApp
 //
 // @HiltAndroidApp : fondation du portage architecture StreamVault-IPTV
 // (etape 1/6, voir le plan) — active la generation du graphe de dependances
-// Hilt pour toute l'appli. Rien n'est encore injecte via Hilt a ce stade.
+// Hilt pour toute l'appli.
+//
+// Configuration.Provider (etape 3/6) : WorkManager utilise HiltWorkerFactory
+// pour injecter les dependances des Workers (CatalogSyncWorker) — necessite
+// de desactiver son initialisation par defaut dans AndroidManifest.xml.
 @HiltAndroidApp
-class PlexoraApp : Application(), ImageLoaderFactory {
+class PlexoraApp : Application(), ImageLoaderFactory, Configuration.Provider {
+    @Inject lateinit var workerFactory: HiltWorkerFactory
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().setWorkerFactory(workerFactory).build()
+
+
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
         .okHttpClient { XtreamClient.http }
         .crossfade(200)
