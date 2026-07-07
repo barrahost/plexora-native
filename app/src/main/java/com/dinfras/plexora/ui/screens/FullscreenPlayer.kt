@@ -31,7 +31,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import com.dinfras.plexora.player.LiveVideoPlayer
 import com.dinfras.plexora.ui.AppUiState
 import com.dinfras.plexora.ui.theme.PlexoraOrange
 import kotlinx.coroutines.delay
@@ -46,6 +45,15 @@ private const val CONTROLS_TIMEOUT_MS = 5_000L
 @UnstableApi
 @Composable
 fun FullscreenPlayer(streamUrl: String, title: String, onClose: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // Libere le lecteur principal partage (PlayerEngine, etape 4/6 du
+    // portage architecture StreamVault-IPTV) a la fermeture reelle de ce
+    // plein ecran -- PersistentLiveVideoPlayer ne le fait plus lui-meme,
+    // puisqu'il survit normalement au-dela d'une seule composition.
+    val closeAndRelease: () -> Unit = {
+        com.dinfras.plexora.di.playerEngineOf(context).release()
+        onClose()
+    }
     val overlayAlpha = AppUiState.overlayAlpha.floatValue
     val focusRequester = remember { FocusRequester() }
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
@@ -89,7 +97,7 @@ fun FullscreenPlayer(streamUrl: String, title: String, onClose: () -> Unit) {
     }
 
     BackHandler(enabled = showControls) { showControls = false }
-    BackHandler(enabled = !showControls) { onClose() }
+    BackHandler(enabled = !showControls) { closeAndRelease() }
 
     Box(
         Modifier
@@ -129,7 +137,7 @@ fun FullscreenPlayer(streamUrl: String, title: String, onClose: () -> Unit) {
                 }
             },
     ) {
-        LiveVideoPlayer(streamUrl, Modifier.fillMaxSize(), onPlayerReady = { player = it })
+        com.dinfras.plexora.player.PersistentLiveVideoPlayer(streamUrl, Modifier.fillMaxSize(), onPlayerReady = { player = it })
 
         Row(
             Modifier
@@ -138,7 +146,7 @@ fun FullscreenPlayer(streamUrl: String, title: String, onClose: () -> Unit) {
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onClose) {
+            IconButton(onClick = closeAndRelease) {
                 Icon(Icons.Filled.ArrowBack, contentDescription = "Retour", tint = Color.White)
             }
             Text(title, color = Color.White, fontWeight = FontWeight.SemiBold)

@@ -88,10 +88,11 @@ class LiveFullscreenActivity : ComponentActivity() {
     }
 
     // La session plein ecran est bien terminee ici (pas juste une
-    // recomposition) : c'est le seul endroit sur qui doit liberer le lecteur
-    // persistant de LiveFullscreenPlayerSession.
+    // recomposition) : c'est un des endroits qui doit liberer le lecteur
+    // principal partage (PlayerEngine, etape 4/6 du portage architecture
+    // StreamVault-IPTV) — l'autre etant FullscreenPlayer.kt (Films/Series).
     override fun onDestroy() {
-        com.dinfras.plexora.player.LiveFullscreenPlayerSession.release()
+        com.dinfras.plexora.di.playerEngineOf(this).release()
         super.onDestroy()
     }
 }

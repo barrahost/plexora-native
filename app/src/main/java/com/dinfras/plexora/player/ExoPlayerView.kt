@@ -63,8 +63,10 @@ internal data class PlayerSettings(
     val tunneling: Boolean,
 )
 
+// Interne (pas prive) : appele aussi depuis PlayerEngine.kt, dans un autre
+// fichier du meme module.
 @UnstableApi
-private fun buildLivePlayer(context: android.content.Context, streamUrl: String, settings: PlayerSettings): ExoPlayer {
+internal fun buildLivePlayer(context: android.content.Context, streamUrl: String, settings: PlayerSettings): ExoPlayer {
     com.dinfras.plexora.data.DebugLog.event("buildLivePlayer start")
     val (minMs, maxMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs) = when (settings.bufferMode) {
         BufferMode.NONE -> intArrayOf(1_000, 3_000, 500, 500)
@@ -118,56 +120,6 @@ private fun buildLivePlayer(context: android.content.Context, streamUrl: String,
             playWhenReady = true
         }
         .also { com.dinfras.plexora.data.DebugLog.event("buildLivePlayer: prepare() done, return") }
-}
-
-// Session de lecture live persistante : inspiree de l'architecture de
-// StreamVault-IPTV (Media3PlayerEngine), un projet Kotlin/Compose/Media3
-// similaire au notre. Chez eux, l'ExoPlayer vit dans un objet independant de
-// Compose et n'est JAMAIS reconstruit a chaque zap — seulement quand le
-// profil de lecture change vraiment (decodeur, politique de tampon) ; le
-// changement de chaine se contente de rebrancher setMediaItem()+prepare() sur
-// l'instance existante. Chez nous, LiveVideoPlayer (utilise par Films/Series,
-// qui fonctionnent bien) construit un ExoPlayer via remember(streamUrl) :
-// correct pour un lecteur de VOD monte une fois, mais risque pour le zapping
-// live intensif si jamais le sous-arbre Compose se reconstruit (meme
-// rarement) pendant qu'un flux est deja en cours de negociation avec le
-// decodeur materiel. LiveFullscreenPlayerSession isole ce risque : un seul
-// ExoPlayer construit pour toute la duree de vie de LiveFullscreenActivity.
-object LiveFullscreenPlayerSession {
-    @Volatile private var player: ExoPlayer? = null
-    @Volatile private var settingsUsed: PlayerSettings? = null
-
-    // Interne (comme PlayerSettings) : n'est appele que depuis
-    // PersistentLiveVideoPlayer, dans ce meme module.
-    @UnstableApi
-    @Synchronized
-    internal fun playerFor(context: android.content.Context, streamUrl: String, settings: PlayerSettings): ExoPlayer {
-        val existing = player
-        return if (existing != null && settingsUsed == settings) {
-            com.dinfras.plexora.data.DebugLog.event("LiveFullscreenPlayerSession: reuse existing player")
-            existing.apply {
-                setMediaItem(MediaItem.fromUri(streamUrl))
-                prepare()
-                playWhenReady = true
-            }
-        } else {
-            com.dinfras.plexora.data.DebugLog.event("LiveFullscreenPlayerSession: (re)build player (premiere fois ou reglages changes)")
-            existing?.release()
-            buildLivePlayer(context, streamUrl, settings).also {
-                player = it
-                settingsUsed = settings
-            }
-        }
-    }
-
-    // Appele depuis LiveFullscreenActivity.onDestroy() : la session plein
-    // ecran est bien terminee, plus aucune raison de garder ce lecteur vivant.
-    @Synchronized
-    fun release() {
-        player?.release()
-        player = null
-        settingsUsed = null
-    }
 }
 
 // Cache global (meme principe que CatalogCache) : les preferences lecteur
@@ -322,12 +274,13 @@ fun LiveVideoPlayer(
     }
 }
 
-// Variante pour le zapping live plein ecran (LiveFullscreenPlayer/LiveOsd.kt) :
-// s'appuie sur LiveFullscreenPlayerSession pour ne JAMAIS reconstruire
-// l'ExoPlayer au changement de chaine — seulement rebrancher le nouveau flux
-// sur l'instance existante. Le apercu (retire en v2.42) et Films/Series
-// (FullscreenPlayer.kt) continuent d'utiliser LiveVideoPlayer normal, qui
-// n'a pas besoin de cette persistance (un seul flux par ecran, jamais de zap).
+// Lecteur principal partage (Live plein ecran, Films, Series, Radio) : ne
+// reconstruit JAMAIS l'ExoPlayer au changement de chaine/contenu — s'appuie
+// sur PlayerEngine (Hilt-scope, etape 4/6 du portage architecture
+// StreamVault-IPTV, voir le plan), qui rebranche seulement le nouveau flux
+// sur l'instance existante. L'apercu EPG (LiveOsd.kt, vignette secondaire
+// dans le guide TV) continue d'utiliser LiveVideoPlayer normal — il ne doit
+// jamais interrompre le lecteur principal en cours.
 @UnstableApi
 @Composable
 fun PersistentLiveVideoPlayer(
@@ -341,12 +294,12 @@ fun PersistentLiveVideoPlayer(
     var isBuffering by remember { mutableStateOf(true) }
     var playerError by remember { mutableStateOf<String?>(null) }
 
-    // Cle Unit (pas streamUrl) : construit/recupere le lecteur de la session
-    // UNE FOIS pour toute la duree de vie de ce composable ; le changement de
+    // Cle Unit (pas streamUrl) : recupere le lecteur du moteur partage UNE
+    // FOIS pour toute la duree de vie de ce composable ; le changement de
     // flux au zapping se fait ensuite via le LaunchedEffect(streamUrl)
     // ci-dessous, sur la MEME instance.
     val exoPlayer = remember(Unit) {
-        LiveFullscreenPlayerSession.playerFor(context, streamUrl, settings)
+        com.dinfras.plexora.di.playerEngineOf(context).playerFor(streamUrl, settings)
     }
 
     LaunchedEffect(streamUrl) {
@@ -390,8 +343,9 @@ fun PersistentLiveVideoPlayer(
         onDispose {
             // PAS de release() ici : contrairement a LiveVideoPlayer, ce
             // lecteur survit au-dela de cette composition — sa liberation
-            // reelle se fait dans LiveFullscreenPlayerSession.release(),
-            // appele depuis LiveFullscreenActivity.onDestroy().
+            // reelle se fait via PlayerEngine.release(), appele depuis
+            // LiveFullscreenActivity.onDestroy() ou FullscreenPlayer.kt
+            // (Films/Series) a la fermeture reelle du plein ecran.
             exoPlayer.removeListener(listener)
         }
     }

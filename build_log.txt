@@ -27,8 +27,10 @@ to this project's gradle.properties.
 > Task :app:parseDebugLocalResources UP-TO-DATE
 > Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
 > Task :app:extractDeepLinksDebug UP-TO-DATE
-> Task :app:processDebugMainManifest
-> Task :app:processDebugManifest
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
 > Task :app:javaPreCompileDebug UP-TO-DATE
 > Task :app:mergeDebugShaders UP-TO-DATE
 > Task :app:compileDebugShaders NO-SOURCE
@@ -45,10 +47,11 @@ to this project's gradle.properties.
 > Task :app:validateSigningDebug UP-TO-DATE
 > Task :app:writeDebugAppMetadata UP-TO-DATE
 > Task :app:writeDebugSigningConfigVersions UP-TO-DATE
-> Task :app:processDebugManifestForPackage
-> Task :app:processDebugResources
 > Task :app:kspDebugKotlin
+
 > Task :app:compileDebugKotlin
+w: file:///C:/Claude-Work/Project/plexora-native/app/src/main/java/com/dinfras/plexora/ui/screens/FullscreenPlayer.kt:150:35 'val Icons.Filled.ArrowBack: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.ArrowBack.
+
 > Task :app:compileDebugJavaWithJavac
 > Task :app:hiltAggregateDepsDebug
 > Task :app:hiltJavaCompileDebug
@@ -62,5 +65,5 @@ to this project's gradle.properties.
 > Task :app:createDebugApkListingFileRedirect
 > Task :app:assembleDebug
 
-BUILD SUCCESSFUL in 10s
-40 actionable tasks: 16 executed, 24 up-to-date
+BUILD SUCCESSFUL in 8s
+40 actionable tasks: 12 executed, 28 up-to-date
