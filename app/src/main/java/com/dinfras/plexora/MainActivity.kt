@@ -68,6 +68,11 @@ private enum class Tab(val label: String, val icon: ImageVector) {
 // en haut de l'ecran etait invisible car coupee par la TV.
 private val TvSafeArea = PaddingValues(horizontal = 32.dp, vertical = 20.dp)
 
+// @AndroidEntryPoint : requis pour que hiltViewModel() fonctionne dans les
+// composables hebergés ici (ex. MoviesScreen -> MoviesViewModel, etape 5/6
+// du portage architecture StreamVault-IPTV). Sans cette annotation, l'appli
+// plantait a l'ouverture de tout ecran utilisant hiltViewModel().
+@dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (event.action == android.view.KeyEvent.ACTION_DOWN) {
