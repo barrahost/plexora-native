@@ -301,7 +301,7 @@ fun LiveFullscreenPlayer(
             .focusable()
             .onKeyEvent { keyHandler(it) },
     ) {
-        LiveVideoPlayer(url, Modifier.fillMaxSize())
+        com.dinfras.plexora.player.PersistentLiveVideoPlayer(url, Modifier.fillMaxSize())
 
         when {
             showGrid -> EpgGridOverlay(

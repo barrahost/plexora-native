@@ -86,4 +86,12 @@ class LiveFullscreenActivity : ComponentActivity() {
             }
         }
     }
+
+    // La session plein ecran est bien terminee ici (pas juste une
+    // recomposition) : c'est le seul endroit sur qui doit liberer le lecteur
+    // persistant de LiveFullscreenPlayerSession.
+    override fun onDestroy() {
+        com.dinfras.plexora.player.LiveFullscreenPlayerSession.release()
+        super.onDestroy()
+    }
 }
