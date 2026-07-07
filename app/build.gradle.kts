@@ -2,6 +2,10 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    // Etape 1 du portage architecture StreamVault-IPTV (Hilt/Room/WorkManager) :
+    // fondations seulement, rien n'est encore migre a ce stade.
+    id("com.google.devtools.ksp")
+    id("com.google.dagger.hilt.android")
 }
 
 android {
@@ -17,8 +21,8 @@ android {
         // dessus, faisant echouer silencieusement les mises a jour via
         // Downloader sur les TV qui avaient encore l'ancienne app. Doit
         // rester superieur a 7 et etre incremente a chaque APK publie.
-        versionCode = 54
-        versionName = "2.46"
+        versionCode = 55
+        versionName = "2.47"
     }
 
     buildTypes {
@@ -67,6 +71,23 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // Fondations du portage architecture StreamVault-IPTV (etape 1/6, voir
+    // le plan) : Hilt (injection de dependances), Room (base SQLite locale,
+    // remplacera CatalogCache/LocalEpgStore), WorkManager (synchronisation de
+    // catalogue en arriere-plan). Rien n'est encore migre a ce stade — ces
+    // dependances ne sont pas encore utilisees ailleurs dans le code.
+    implementation("com.google.dagger:hilt-android:2.52")
+    ksp("com.google.dagger:hilt-android-compiler:2.52")
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    implementation("androidx.hilt:hilt-work:1.2.0")
+    ksp("androidx.hilt:hilt-compiler:1.2.0")
+
+    implementation("androidx.room:room-runtime:2.7.1")
+    implementation("androidx.room:room-ktx:2.7.1")
+    ksp("androidx.room:room-compiler:2.7.1")
+
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

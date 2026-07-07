@@ -6,11 +6,17 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.dinfras.plexora.data.XtreamClient
+import dagger.hilt.android.HiltAndroidApp
 
 // Configure Coil une seule fois pour toute l'appli : cache disque/memoire
 // explicite + fondu a l'affichage (au lieu d'un pop-in brutal, comme
 // TiviMate) + le meme client OkHttp que l'API pour ne pas multiplier les
 // pools de connexions vers le serveur IPTV.
+//
+// @HiltAndroidApp : fondation du portage architecture StreamVault-IPTV
+// (etape 1/6, voir le plan) — active la generation du graphe de dependances
+// Hilt pour toute l'appli. Rien n'est encore injecte via Hilt a ce stade.
+@HiltAndroidApp
 class PlexoraApp : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
         .okHttpClient { XtreamClient.http }
